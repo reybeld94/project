@@ -206,6 +206,8 @@ export function SeriesPage(appState) {
     el("div", { class:"p-5 text-sm text-zinc-300" }, "Cargando series…")
   ]);
 
+  const reload = () => load().catch(err => { status.textContent = `Error: ${err.message}`; });
+
   async function load() {
 
     status.textContent = "Cargando…";
@@ -244,7 +246,7 @@ export function SeriesPage(appState) {
           class:"absolute top-2 right-2 w-9 h-9 rounded-xl bg-black/40 border border-white/10 text-zinc-100 hover:bg-black/60 transition",
           type:"button",
           title:"Edit",
-          onclick: (e) => { e.stopPropagation(); openSeriesEditModal(item, load); }
+          onclick: (e) => { e.stopPropagation(); openSeriesEditModal(item, reload); }
         }, "✎"),
       ]);
 
@@ -276,13 +278,13 @@ export function SeriesPage(appState) {
             if (!canPrev) return;
             offset = Math.max(0, offset - limit);
             appState.series.offset = offset;
-            load();
+            reload();
           }}),
           button("Next", { tone:"zinc", small:true, onClick: () => {
             if (!canNext) return;
             offset = offset + limit;
             appState.series.offset = offset;
-            load();
+            reload();
           }}),
         ])
       ])
@@ -291,13 +293,13 @@ export function SeriesPage(appState) {
 
   const filterBar = el("div", { class:"inline-flex gap-2" }, [
     button("All", { tone: approved === null ? "blue" : "zinc", small:true, onClick: () => {
-      approved = null; appState.series.approved = null; offset = 0; appState.series.offset = 0; load();
+      approved = null; appState.series.approved = null; offset = 0; appState.series.offset = 0; reload();
     }}),
     button("Approved", { tone: approved === true ? "blue" : "zinc", small:true, onClick: () => {
-      approved = true; appState.series.approved = true; offset = 0; appState.series.offset = 0; load();
+      approved = true; appState.series.approved = true; offset = 0; appState.series.offset = 0; reload();
     }}),
     button("Pending", { tone: approved === false ? "blue" : "zinc", small:true, onClick: () => {
-      approved = false; appState.series.approved = false; offset = 0; appState.series.offset = 0; load();
+      approved = false; appState.series.approved = false; offset = 0; appState.series.offset = 0; reload();
     }}),
   ]);
 
@@ -308,7 +310,7 @@ export function SeriesPage(appState) {
         value:q,
         onInput:(v)=>{ q=v; appState.series.q=v; }
       })),
-      button("Search", { tone:"blue", onClick:()=>{ offset=0; appState.series.offset=0; load(); } }),
+      button("Search", { tone:"blue", onClick:()=>{ offset=0; appState.series.offset=0; reload(); } }),
     ]),
     el("div", { class:"w-full flex items-center justify-between" }, [ filterBar, status ])
   ]);
@@ -320,7 +322,7 @@ export function SeriesPage(appState) {
     content: el("div", { class:"h-full min-h-0 overflow-hidden" }, gridWrap),
   });
 
-  load().catch(err => { status.textContent = `Error: ${err.message}`; });
+  reload();
   return node;
 }
 

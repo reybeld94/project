@@ -492,6 +492,8 @@ export function LivePage(appState) {
     el("div", { class:"p-5 text-sm text-zinc-300" }, "Cargando canales…")
   ]);
 
+  const reload = () => load().catch(err => { status.textContent = `Error: ${err.message}`; });
+
   async function load() {
     const seq = ++loadSeq;
     status.textContent = "Loading…";
@@ -875,11 +877,11 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
         el("div", { class:"flex items-center gap-2" }, [
           button("Prev", {
             tone:"zinc", small:true,
-            onClick:()=>{ if(!canPrev) return; offset = Math.max(0, offset-limit); appState.live.offset=offset; load(); }
+            onClick:()=>{ if(!canPrev) return; offset = Math.max(0, offset-limit); appState.live.offset=offset; reload(); }
           }),
           button("Next", {
             tone:"zinc", small:true,
-            onClick:()=>{ if(!canNext) return; offset = offset+limit; appState.live.offset=offset; load(); }
+            onClick:()=>{ if(!canNext) return; offset = offset+limit; appState.live.offset=offset; reload(); }
           }),
         ])
       ])
@@ -894,7 +896,7 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
       appState.live.approved = approved;
       offset = 0;
       appState.live.offset = 0;
-      load();
+      reload();
     }
   }, [
     el("option", { value:"all", selected: approved === null }, "All"),
@@ -919,7 +921,7 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
       searchT = setTimeout(() => {
         if (q === lastQ) return;
         lastQ = q;
-        load();
+        reload();
       }, 250);
     }
   })),
@@ -933,6 +935,6 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
     content: el("div", { class:"h-full min-h-0 overflow-hidden" }, tableWrap),
   });
 
-  load().catch(err => { status.textContent = `Error: ${err.message}`; });
+  reload();
   return node;
 }

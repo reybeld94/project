@@ -342,6 +342,9 @@ export function TmdbTab() {
     activityBox,
   ]);
 
-  load();
+  load().catch((e) => {
+    msg.textContent = `Error: ${e.message}`;
+    stopPolling();
+  });
   return root;
 }
