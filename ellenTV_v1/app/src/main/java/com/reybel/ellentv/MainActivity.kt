@@ -21,6 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.snapshotFlow
 import androidx.media3.common.Player
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.reybel.ellentv.ui.epg.EpgSection
@@ -212,6 +214,12 @@ fun TvHomeScreen(
         }
     }
 
+    LaunchedEffect(showBoot, streamUrl) {
+        if (!showBoot) {
+            player.volume = savedVolume
+        }
+    }
+
     LaunchedEffect(player) {
         isPlayerReady = false
         snapshotFlow { player.playbackState }
@@ -225,8 +233,8 @@ fun TvHomeScreen(
         if (showBoot || isFullscreen) drawerOpen = false
     }
 
-    val bootDataReady = remember(channels, epgGrid, streamUrl) {
-        channels.isNotEmpty() && epgGrid != null && streamUrl.isNotBlank()
+    val bootDataReady = remember(channels, epgGrid) {
+        channels.isNotEmpty() && epgGrid != null
     }
 
     LaunchedEffect(bootDataReady, isPlayerReady) {
@@ -400,51 +408,67 @@ fun TvHomeScreen(
 
             val pid = repo.getDefaultProviderId()
             providerId = pid
-            val items = repo.fetchLive(pid)
 
-            bootTitle = "Loading program guide (EPG)…"
-            bootProgress = 0.45f
+            coroutineScope {
+                val channelsDeferred = async(Dispatchers.IO) { repo.fetchLive(pid) }
+                val epgDeferred = async(Dispatchers.IO) {
+                    repo.fetchEpgGrid(
+                        providerId = pid,
+                        hours = 8,
+                        categoryExtId = null,
+                        limitChannels = 80,
+                        offsetChannels = 0
+                    )
+                }
 
-            val liveRaw = repo.fetchLiveRaw(pid)
+                bootTitle = "Loading program guide (EPG)…"
+                bootProgress = 0.45f
 
-            channels = items.sortedWith { a, b ->
-                val an = a.channelNumber ?: Int.MAX_VALUE
-                val bn = b.channelNumber ?: Int.MAX_VALUE
-                val c = an.compareTo(bn)
-                if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
-            }
+                val items = channelsDeferred.await()
+                val gridResp = epgDeferred.await()
 
-            val raw = repo.fetchEpgGridRaw(providerId = pid, hours = 8)
-            Log.d("EPG_RAW", raw)
+                channels = items.sortedWith { a, b ->
+                    val an = a.channelNumber ?: Int.MAX_VALUE
+                    val bn = b.channelNumber ?: Int.MAX_VALUE
+                    val c = an.compareTo(bn)
+                    if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
+                }
 
-            val gridResp = repo.fetchEpgGrid(
-                providerId = pid,
-                hours = 8,
-                categoryExtId = null,
-                limitChannels = 80,
-                offsetChannels = 0
-            )
-            epgGrid = gridResp
-            lastEpgFetchAt = System.currentTimeMillis()
-            bootTitle = "Preparing video preview…"
-            bootProgress = 0.80f
-            epgError = null
+                epgGrid = gridResp
+                lastEpgFetchAt = System.currentTimeMillis()
+                bootTitle = "Preparing video preview…"
+                bootProgress = 0.80f
+                epgError = null
 
-            val allowed = items.map { it.id }.toSet()
+                val allowed = items.map { it.id }.toSet()
 
-            val preferredId =
-                gridResp.items.firstOrNull { it.liveId in allowed && it.epgSourceId != null && it.programs.isNotEmpty() }?.liveId
-                    ?: items.firstOrNull()?.id
+                val preferredId =
+                    gridResp.items.firstOrNull { it.liveId in allowed && it.epgSourceId != null && it.programs.isNotEmpty() }?.liveId
+                        ?: items.firstOrNull()?.id
 
-            selectedId = preferredId
-            error = if (items.isEmpty()) "No hay canales. ¿Tienes approved=true?" else null
+                selectedId = preferredId
+                error = if (items.isEmpty()) "No hay canales. ¿Tienes approved=true?" else null
 
-            if (!preferredId.isNullOrBlank()) {
-                bootProgress = 0.92f
-                bootTitle = "Almost ready…"
-                streamUrl = repo.fetchPlayUrl(preferredId)
-            } else {
-                streamUrl = ""
+                if (!preferredId.isNullOrBlank()) {
+                    bootProgress = 0.92f
+                    bootTitle = "Almost ready…"
+                    streamUrl = withContext(Dispatchers.IO) { repo.fetchPlayUrl(preferredId) }
+                } else {
+                    streamUrl = ""
+                }
+
+                if (Log.isLoggable("EPG_RAW", Log.DEBUG)) {
+                    launch(Dispatchers.IO) {
+                        runCatching {
+                            val liveRaw = repo.fetchLiveRaw(pid)
+                            val raw = repo.fetchEpgGridRaw(providerId = pid, hours = 8)
+                            Log.d("ELLENTV_LIVE_RAW", liveRaw)
+                            Log.d("EPG_RAW", raw)
+                        }.onFailure { e ->
+                            Log.w("ELLENTV_RAW", "Raw fetch failed: ${e.message}")
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             epgError = e.message ?: "Error loading EPG"
