@@ -99,6 +99,7 @@ data class VodListResponse(
 data class VodItem(
     val id: String,
     val name: String,
+    @Json(name = "normalized_name") val normalizedName: String? = null,
 
     // tu API dijo que devuelve “poster calculado”
     val poster: String? = null,
@@ -110,7 +111,17 @@ data class VodItem(
     val approved: Boolean = false,
     @Json(name = "is_active") val isActive: Boolean = true,
 
+    @Json(name = "tmdb_status") val tmdbStatus: String? = null,
+    @Json(name = "tmdb_title") val tmdbTitle: String? = null,
+    @Json(name = "tmdb_id") val tmdbId: Int? = null,
+
     @Json(name = "container_extension") val containerExtension: String? = null
 ) {
     val posterUrl: String? get() = customPosterUrl ?: poster ?: streamIcon
+    val displayTitle: String
+        get() = when {
+            tmdbStatus == "synced" && !tmdbTitle.isNullOrBlank() -> tmdbTitle
+            !normalizedName.isNullOrBlank() -> normalizedName
+            else -> name
+        }
 }

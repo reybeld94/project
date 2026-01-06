@@ -221,7 +221,7 @@ fun SeriesScreen(
 
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    text = item.name,
+                                    text = item.displayTitle,
                                     color = Color.White.copy(alpha = if (focused) 1.0f else 0.9f),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,

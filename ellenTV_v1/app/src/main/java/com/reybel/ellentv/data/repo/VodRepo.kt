@@ -36,7 +36,7 @@ class VodRepo {
             limit = limit,
             offset = offset,
             activeOnly = true,
-            approved = null
+            approved = true
         )
     }
 
