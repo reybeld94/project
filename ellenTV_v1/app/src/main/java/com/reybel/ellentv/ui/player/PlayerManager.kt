@@ -201,13 +201,17 @@ class PlayerManager(context: Context) {
                             lastRebufferTime = now
 
                             if (rebufferCount >= 2 && bufferLevel != BufferLevel.MAXIMUM) {
-                                Log.e("ELLENTV_BUFFER", "Frequent rebuffering! Upgrading buffer...")
+                                val skipToHigh = bufferLevel == BufferLevel.LOW || bufferLevel == BufferLevel.NORMAL
+                                Log.e(
+                                    "ELLENTV_BUFFER",
+                                    "Frequent rebuffering! Upgrading buffer (aggressive=$skipToHigh)..."
+                                )
                                 needsBufferUpgrade = true
                                 onHealthIssue?.invoke("Stream inestable - Aumentando buffer")
 
                                 scope.launch {
                                     delay(800)
-                                    if (needsBufferUpgrade) upgradeBuffer()
+                                    if (needsBufferUpgrade) upgradeBuffer(skipToHigh)
                                 }
                             }
                         }
@@ -306,13 +310,15 @@ class PlayerManager(context: Context) {
         })
     }
 
-    private fun upgradeBuffer() {
+    private fun upgradeBuffer(skipToHigh: Boolean) {
         val oldLevel = bufferLevel
-        bufferLevel = when (bufferLevel) {
-            BufferLevel.LOW -> BufferLevel.NORMAL
-            BufferLevel.NORMAL -> BufferLevel.HIGH
-            BufferLevel.HIGH -> BufferLevel.MAXIMUM
-            BufferLevel.MAXIMUM -> BufferLevel.MAXIMUM
+        bufferLevel = when {
+            skipToHigh && bufferLevel == BufferLevel.LOW -> BufferLevel.HIGH
+            skipToHigh && bufferLevel == BufferLevel.NORMAL -> BufferLevel.HIGH
+            bufferLevel == BufferLevel.LOW -> BufferLevel.NORMAL
+            bufferLevel == BufferLevel.NORMAL -> BufferLevel.HIGH
+            bufferLevel == BufferLevel.HIGH -> BufferLevel.MAXIMUM
+            else -> BufferLevel.MAXIMUM
         }
 
         if (oldLevel == bufferLevel) {
