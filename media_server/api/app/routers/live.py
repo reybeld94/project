@@ -438,6 +438,8 @@ def list_live_streams_all(
                 "alt2_stream_id": str(x.alt2_stream_id) if x.alt2_stream_id else None,
                 "alt3_stream_id": str(x.alt3_stream_id) if x.alt3_stream_id else None,
 
+                "approved": x.approved,
+
                 "epg_source_id": str(x.epg_source_id) if getattr(x, "epg_source_id", None) else None,
                 "epg_channel_id": str(x.epg_channel_id) if getattr(x, "epg_channel_id", None) else None,
 
