@@ -102,11 +102,10 @@ def list_vod_all(
     stmt = (
         select(VodStream)
         .join(Provider, Provider.id == VodStream.provider_id)
-        .where(Provider.is_active == True)
     )
 
-    if active_only:
-        stmt = stmt.where(VodStream.is_active == True)
+    # Se eliminan filtros por activo (provider o stream) para mostrar todos los VOD.
+    # El flag active_only se mantiene en la firma por compatibilidad, pero ya no filtra.
 
     if approved is not None:
         stmt = stmt.where(VodStream.approved == approved)
