@@ -74,7 +74,13 @@ import kotlinx.coroutines.delay
 
 import java.time.Instant
 import androidx.compose.ui.Alignment
+import kotlin.math.ceil
+import kotlin.math.max
 
+private const val INITIAL_EPG_HOURS = 4
+private const val INITIAL_EPG_CHANNELS = 30
+private const val FULL_EPG_HOURS = 8
+private const val FULL_EPG_CHANNELS = 80
 
 
 @OptIn(UnstableApi::class)
@@ -136,6 +142,7 @@ fun TvHomeScreen(
 
     var providerId by remember { mutableStateOf<String?>(null) }
     var lastEpgFetchAt by remember { mutableStateOf(0L) }
+    var isEpgFetchInFlight by remember { mutableStateOf(false) }
 
     var drawerOpen by remember { mutableStateOf(false) }
     var section by rememberSaveable { mutableStateOf(AppSection.LIVE) }
@@ -177,6 +184,57 @@ fun TvHomeScreen(
     }
 
     val repo = remember { ChannelRepo() }
+
+    fun requestedEpgHours(): Int {
+        val minutes = epgGrid?.let { epgWindowDurationMinutes(it) } ?: (FULL_EPG_HOURS * 60)
+        val currentHours = ceil(minutes.toDouble() / 60.0).toInt().coerceAtLeast(INITIAL_EPG_HOURS)
+        return max(currentHours, FULL_EPG_HOURS)
+    }
+
+    fun requestedChannelLimit(): Int {
+        val currentCount = epgGrid?.count ?: INITIAL_EPG_CHANNELS
+        return max(currentCount, FULL_EPG_CHANNELS)
+    }
+
+    suspend fun fetchAndMergeEpg(
+        pid: String,
+        hours: Int,
+        limitChannels: Int,
+        offsetChannels: Int = 0,
+        reason: String,
+        preserveWindow: Boolean = true
+    ) {
+        if (isEpgFetchInFlight) return
+        isEpgFetchInFlight = true
+
+        try {
+            val incoming = withContext(Dispatchers.IO) {
+                repo.fetchEpgGrid(
+                    providerId = pid,
+                    hours = hours,
+                    categoryExtId = null,
+                    limitChannels = limitChannels,
+                    offsetChannels = offsetChannels
+                )
+            }
+
+            val merged = mergeEpgGrids(epgGrid, incoming, preserveExistingWindow = preserveWindow)
+            val changed = merged != epgGrid
+            epgGrid = merged
+            lastEpgFetchAt = System.currentTimeMillis()
+            epgError = null
+
+            Log.i(
+                "ELLENTV_EPG",
+                "EPG updated ($reason). changed=$changed window=${merged.window.start}..${merged.window.end} items=${merged.count}"
+            )
+        } catch (e: Exception) {
+            Log.e("ELLENTV_EPG", "EPG fetch failed ($reason): ${e.message}", e)
+            epgError = "EPG refresh: ${e.message ?: "error"}"
+        } finally {
+            isEpgFetchInFlight = false
+        }
+    }
 
     var channels by remember { mutableStateOf(emptyList<LiveItem>()) }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -361,10 +419,8 @@ fun TvHomeScreen(
         while (true) {
             delay(5 * 60_000L)
 
-            val currentGrid = epgGrid
-            val windowEnd: Instant? = currentGrid?.window?.end?.let { endStr ->
-                runCatching { parseInstantFlexible(endStr) }.getOrNull()
-            }
+            val currentGrid = epgGrid ?: continue
+            val windowEnd = runCatching { parseInstantFlexible(currentGrid.window.end) }.getOrNull()
 
             val staleByTime =
                 (System.currentTimeMillis() - lastEpgFetchAt) >= 55 * 60_000L
@@ -374,29 +430,16 @@ fun TvHomeScreen(
 
             if (!staleByTime && !nearWindowEnd) continue
 
-            try {
-                val newGrid = withContext(Dispatchers.IO) {
-                    repo.fetchEpgGrid(
-                        providerId = pid,
-                        hours = 8,
-                        categoryExtId = null,
-                        limitChannels = 80,
-                        offsetChannels = 0
-                    )
-                }
+            val hours = requestedEpgHours()
+            val channelsLimit = requestedChannelLimit()
 
-                epgGrid = newGrid
-                epgError = null
-                lastEpgFetchAt = System.currentTimeMillis()
-
-                Log.i(
-                    "ELLENTV_EPG",
-                    "EPG refreshed. window=${newGrid.window.start}..${newGrid.window.end}"
-                )
-            } catch (e: Exception) {
-                Log.e("ELLENTV_EPG", "EPG refresh failed: ${e.message}", e)
-                epgError = "EPG refresh: ${e.message ?: "error"}"
-            }
+            fetchAndMergeEpg(
+                pid = pid,
+                hours = hours,
+                limitChannels = channelsLimit,
+                reason = if (nearWindowEnd) "auto-refresh-window-edge" else "auto-refresh-stale",
+                preserveWindow = true
+            )
         }
     }
 
@@ -414,9 +457,9 @@ fun TvHomeScreen(
                 val epgDeferred = async(Dispatchers.IO) {
                     repo.fetchEpgGrid(
                         providerId = pid,
-                        hours = 8,
+                        hours = INITIAL_EPG_HOURS,
                         categoryExtId = null,
-                        limitChannels = 80,
+                        limitChannels = INITIAL_EPG_CHANNELS,
                         offsetChannels = 0
                     )
                 }
@@ -457,11 +500,25 @@ fun TvHomeScreen(
                     streamUrl = ""
                 }
 
+                scope.launch {
+                    fetchAndMergeEpg(
+                        pid = pid,
+                        hours = FULL_EPG_HOURS,
+                        limitChannels = FULL_EPG_CHANNELS,
+                        reason = "expand-epg",
+                        preserveWindow = true
+                    )
+                }
+
                 if (Log.isLoggable("EPG_RAW", Log.DEBUG)) {
                     launch(Dispatchers.IO) {
                         runCatching {
                             val liveRaw = repo.fetchLiveRaw(pid)
-                            val raw = repo.fetchEpgGridRaw(providerId = pid, hours = 8)
+                            val raw = repo.fetchEpgGridRaw(
+                                providerId = pid,
+                                hours = FULL_EPG_HOURS,
+                                limitChannels = FULL_EPG_CHANNELS
+                            )
                             Log.d("ELLENTV_LIVE_RAW", liveRaw)
                             Log.d("EPG_RAW", raw)
                         }.onFailure { e ->
