@@ -34,10 +34,6 @@ fun OptimizedAsyncImage(
             .diskCacheKey(url)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
-            .placeholderMemoryCacheKey(OPTIMIZED_PLACEHOLDER_MEMORY_KEY)
-            .placeholder(placeholderPainter)
-            .error(placeholderPainter)
-            .fallback(placeholderPainter)
             // Permite usar cache aunque la imagen esté desactualizada
             .allowHardware(true) // Usa hardware acceleration
             .lifecycle(lifecycle)
@@ -48,6 +44,9 @@ fun OptimizedAsyncImage(
         model = imageRequest,
         contentDescription = null,
         modifier = modifier,
-        contentScale = contentScale
+        contentScale = contentScale,
+        placeholder = placeholderPainter,
+        error = placeholderPainter,
+        fallback = placeholderPainter
     )
 }
