@@ -7,12 +7,9 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.items
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,12 +18,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -192,9 +191,10 @@ fun EpgGridView(
         listState.scrollToItem(idx)
     }
 
-    val hScroll = rememberScrollState()
+    val horizontalListState = rememberLazyListState()
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("h:mm a", Locale.US) }
+    val hourWidth: Dp = 340.dp
 
     val timeWindow = remember(grid.window) {
         val apiStart = parseInstantFlexible(grid.window.start)
@@ -202,7 +202,6 @@ fun EpgGridView(
         val windowStart = roundDownToHalfHour(apiStart)
         val windowEnd = roundUpToHalfHour(apiEnd)
         val windowMinutes = Duration.between(windowStart, windowEnd).toMinutes().coerceAtLeast(1)
-        val hourWidth: Dp = 340.dp
         val totalWidth = minutesToWidth(windowMinutes, hourWidth)
 
         TimeWindow(windowStart, windowEnd, windowMinutes, totalWidth)
@@ -279,33 +278,42 @@ fun EpgGridView(
 
             Spacer(Modifier.width(12.dp))
 
-            Row(
+            Box(
                 modifier = Modifier
-                    .horizontalScroll(hScroll)
                     .width(timeWindow.totalWidth)
-                    .fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxHeight()
             ) {
-                val startZ = timeWindow.start.atZone(zone)
-                val halfHourWidth = 340.dp / 2
-                val steps = (timeWindow.durationMinutes / 30).toInt()
+                LazyRow(
+                    state = horizontalListState,
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val startZ = timeWindow.start.atZone(zone)
+                    val halfHourWidth = hourWidth / 2
+                    val steps = (timeWindow.durationMinutes / 30).toInt()
 
-                for (i in 0..steps) {
-                    val t = startZ.plusMinutes((i * 30).toLong())
-                    Box(
-                        modifier = Modifier.width(halfHourWidth),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (i % 2 == 0) {
-                            Text(
-                                t.format(fmt),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
+                    items(count = steps + 1, key = { it }) { i ->
+                        val t = startZ.plusMinutes((i * 30).toLong())
+                        Box(
+                            modifier = Modifier.width(halfHourWidth),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (i % 2 == 0) {
+                                Text(
+                                    t.format(fmt),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.9f)
+                                )
+                            }
                         }
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .drawNowLine(now, timeWindow.start, timeWindow.end)
+                )
             }
         }
     }
@@ -331,9 +339,10 @@ fun EpgGridView(
                 isSelected = isSelected,
                 timeWindow = timeWindow,
                 now = now,
-                hScroll = hScroll,
+                horizontalState = horizontalListState,
                 channelColWidth = channelColWidth,
                 rowHeight = rowHeight,
+                hourWidth = hourWidth,
                 focusRequester = frFor(rowData.liveId),
                 onSelectLive = onSelectLive,
                 onHover = onHover,
@@ -349,9 +358,10 @@ fun EpgRow(
     isSelected: Boolean,
     timeWindow: TimeWindow,
     now: Instant,
-    hScroll: androidx.compose.foundation.ScrollState,
+    horizontalState: LazyListState,
     channelColWidth: Dp,
     rowHeight: Dp,
+    hourWidth: Dp,
     focusRequester: FocusRequester,
     onSelectLive: (String) -> Unit,
     onHover: (String, EpgProgram?) -> Unit,
@@ -381,21 +391,27 @@ fun EpgRow(
 
         Box(
             modifier = Modifier
-                .horizontalScroll(hScroll)
                 .width(timeWindow.totalWidth)
                 .height(rowHeight)
-                .drawNowLine(now, timeWindow.start, timeWindow.end)
         ) {
             ProgramsRow(
                 liveId = rowData.liveId,
                 programs = rowData.clampedPrograms,
                 timeWindow = timeWindow,
+                hourWidth = hourWidth,
+                horizontalState = horizontalState,
                 isSelectedChannel = isSelected,
                 onFocused = { liveId, program ->
                     onHover(liveId, program)
                     onChannelColumnFocusChanged(false) // 🔧 NUEVO: ya no estamos en columna de canales
                 },
                 onClick = { onSelectLive(rowData.liveId) }
+            )
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .drawNowLine(now, timeWindow.start, timeWindow.end)
             )
         }
     }
@@ -489,66 +505,136 @@ fun ProgramsRow(
     liveId: String,
     programs: List<ClampedProgram>,
     timeWindow: TimeWindow,
+    hourWidth: Dp,
+    horizontalState: LazyListState,
     isSelectedChannel: Boolean,
     onFocused: (String, EpgProgram?) -> Unit,
     onClick: () -> Unit
 ) {
-    if (programs.isEmpty()) {
-        ProgramCellModern(
-            liveId = liveId,
-            program = null,
-            title = "Sin información",
-            width = timeWindow.totalWidth,
-            isCurrent = false,
-            isSelectedChannel = isSelectedChannel,
-            onFocused = onFocused,
-            onClick = onClick
-        )
-        return
+    val segments = remember(programs, timeWindow, hourWidth) {
+        buildProgramSegments(programs, timeWindow, hourWidth)
     }
 
-    Row(
+    LazyRow(
+        state = horizontalState,
         modifier = Modifier.fillMaxSize(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        contentPadding = segments.contentPadding
     ) {
-        var cursor = timeWindow.start
+        items(
+            items = segments.items,
+            key = { it.key }
+        ) { segment ->
+            when (segment) {
+                is ProgramSegment.Gap -> Spacer(Modifier.width(segment.width))
+                is ProgramSegment.Content -> ProgramCellModern(
+                    liveId = liveId,
+                    program = segment.program,
+                    title = segment.title,
+                    width = segment.programWidth,
+                    isCurrent = segment.isCurrent,
+                    isSelectedChannel = isSelectedChannel,
+                    onFocused = onFocused,
+                    onClick = onClick
+                )
+            }
+        }
+    }
+}
 
-        programs.forEach { clamped ->
+private data class ProgramSegments(
+    val items: List<ProgramSegment>,
+    val contentPadding: PaddingValues
+)
+
+private sealed interface ProgramSegment {
+    val key: String
+
+    data class Gap(
+        override val key: String,
+        val width: Dp
+    ) : ProgramSegment
+
+    data class Content(
+        override val key: String,
+        val program: EpgProgram?,
+        val title: String,
+        val isCurrent: Boolean,
+        val programWidth: Dp
+    ) : ProgramSegment
+}
+
+private fun buildProgramSegments(
+    programs: List<ClampedProgram>,
+    timeWindow: TimeWindow,
+    hourWidth: Dp
+): ProgramSegments {
+    if (programs.isEmpty()) {
+        return ProgramSegments(
+            items = listOf(
+                ProgramSegment.Content(
+                    key = "placeholder",
+                    program = null,
+                    title = "Sin información",
+                    isCurrent = false,
+                    programWidth = timeWindow.totalWidth
+                )
+            ),
+            contentPadding = PaddingValues()
+        )
+    }
+
+    val startPaddingMinutes = Duration.between(timeWindow.start, programs.first().startInstant)
+        .toMinutes()
+        .coerceAtLeast(0)
+    val items = mutableListOf<ProgramSegment>()
+    var cursor = programs.first().startInstant
+
+    programs.forEachIndexed { index, clamped ->
+        if (index > 0) {
             val gapMs = Duration.between(cursor, clamped.startInstant).toMillis()
             if (gapMs > 0) {
                 val gapMin = (gapMs / 60_000).coerceAtLeast(0)
                 if (gapMin > 0) {
-                    Spacer(Modifier.width(minutesToWidth(gapMin, 340.dp)))
+                    val gapWidth = minutesToWidth(gapMin, hourWidth)
+                    items.add(
+                        ProgramSegment.Gap(
+                            key = "gap-$index-${clamped.startInstant.toEpochMilli()}",
+                            width = gapWidth
+                        )
+                    )
                 }
             }
+        }
 
-            val durMin = Duration.between(clamped.startInstant, clamped.endInstant)
-                .toMinutes()
-                .coerceAtLeast(1)
-            val w = minutesToWidth(durMin, 340.dp)
+        val durMin = Duration.between(clamped.startInstant, clamped.endInstant)
+            .toMinutes()
+            .coerceAtLeast(1)
+        val w = minutesToWidth(durMin, hourWidth)
 
-            ProgramCellModern(
-                liveId = liveId,
+        items.add(
+            ProgramSegment.Content(
+                key = "program-$index-${clamped.startInstant.toEpochMilli()}",
                 program = clamped.program,
                 title = clamped.title,
-                width = w,
                 isCurrent = clamped.isCurrent,
-                isSelectedChannel = isSelectedChannel,
-                onFocused = onFocused,
-                onClick = onClick
+                programWidth = w
             )
+        )
 
-            cursor = clamped.endInstant
-        }
-
-        val tailMs = Duration.between(cursor, timeWindow.end).toMillis()
-        if (tailMs > 0) {
-            val tailMin = (tailMs / 60_000).coerceAtLeast(0)
-            if (tailMin > 0) {
-                Spacer(Modifier.width(minutesToWidth(tailMin, 340.dp)))
-            }
-        }
+        cursor = clamped.endInstant
     }
+
+    val tailMs = Duration.between(cursor, timeWindow.end).toMillis()
+    val endPaddingMinutes = (tailMs / 60_000).coerceAtLeast(0)
+
+    return ProgramSegments(
+        items = items,
+        contentPadding = PaddingValues(
+            start = minutesToWidth(startPaddingMinutes, hourWidth),
+            end = minutesToWidth(endPaddingMinutes.toLong(), hourWidth)
+        )
+    )
 }
 
 @Composable
