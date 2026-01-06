@@ -18,9 +18,7 @@ import com.reybel.ellentv.ui.components.SideMenuDrawer
 
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.runtime.snapshotFlow
 import androidx.media3.common.Player
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -314,12 +312,24 @@ fun TvHomeScreen(
     var savedVolume by remember { mutableStateOf(1f) }
     var mutedForConnect by remember { mutableStateOf(false) }
 
-    LaunchedEffect(player) {
-        snapshotFlow { player.playbackState }
-            .distinctUntilChanged()
-            .collect { st ->
-                isPlayerReady = st == Player.STATE_READY
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isPlayerReady = playbackState == Player.STATE_READY
             }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    isPlayerReady = true
+                }
+            }
+        }
+
+        player.addListener(listener)
+
+        onDispose {
+            player.removeListener(listener)
+        }
     }
 
     LaunchedEffect(isBuffering, isPlayerReady, streamUrl, streamAlt1, streamAlt2, streamAlt3) {
