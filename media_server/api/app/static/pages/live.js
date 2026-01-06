@@ -887,19 +887,20 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
   }
 
   const approvedSelect = el("select", {
-  class:"rounded-lg bg-zinc-900/70 border border-white/10 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus-visible:hz-focus",
-  onchange: () => {
-    const v = approvedSelect.value;
-    approved = (v === "approved") ? true : null;
-    appState.live.approved = approved;
-    offset = 0;
-    appState.live.offset = 0;
-    load();
-  }
-}, [
-  el("option", { value:"all", selected: approved !== true }, "All"),
-  el("option", { value:"approved", selected: approved === true }, "Approved"),
-]);
+    class:"rounded-lg bg-zinc-900/70 border border-white/10 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus-visible:hz-focus",
+    onchange: () => {
+      const v = approvedSelect.value;
+      approved = v === "approved" ? true : v === "pending" ? false : null;
+      appState.live.approved = approved;
+      offset = 0;
+      appState.live.offset = 0;
+      load();
+    }
+  }, [
+    el("option", { value:"all", selected: approved === null }, "All"),
+    el("option", { value:"approved", selected: approved === true }, "Approved"),
+    el("option", { value:"pending", selected: approved === false }, "Pending"),
+  ]);
 
 
   const topRight = el("div", { class:"w-[520px] max-w-full flex items-center gap-2" }, [

@@ -354,11 +354,23 @@ function renderFilters() {
     }
   }));
 
-  filterBar.appendChild(button("Sync", {
+  filterBar.appendChild(button("Synced", {
     tone: synced === true ? "blue" : "zinc",
     small:true,
     onClick: () => {
       synced = (synced === true) ? null : true;
+      appState.movies.synced = synced;
+      offset = 0; appState.movies.offset = 0;
+      renderFilters();
+      load();
+    }
+  }));
+
+  filterBar.appendChild(button("Needs Sync", {
+    tone: synced === false ? "blue" : "zinc",
+    small:true,
+    onClick: () => {
+      synced = (synced === false) ? null : false;
       appState.movies.synced = synced;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
