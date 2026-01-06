@@ -6,6 +6,8 @@ import com.reybel.ellentv.data.api.LiveItem
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class GuideCachePayload(
     val providerId: String?,
@@ -25,18 +27,18 @@ class GuideCache(context: Context) {
 
     private val adapter = moshi.adapter(GuideCachePayload::class.java)
 
-    fun load(): GuideCachePayload? {
+    suspend fun load(): GuideCachePayload? {
         return runCatching {
             if (!cacheFile.exists()) return null
-            val json = cacheFile.readText()
-            adapter.fromJson(json)
+            val json = withContext(Dispatchers.IO) { cacheFile.readText() }
+            withContext(Dispatchers.Default) { adapter.fromJson(json) }
         }.getOrNull()
     }
 
-    fun save(payload: GuideCachePayload) {
+    suspend fun save(payload: GuideCachePayload) {
         runCatching {
-            val json = adapter.toJson(payload)
-            cacheFile.writeText(json)
+            val json = withContext(Dispatchers.Default) { adapter.toJson(payload) }
+            withContext(Dispatchers.IO) { cacheFile.writeText(json) }
         }
     }
 }

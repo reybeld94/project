@@ -66,6 +66,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 
 import com.reybel.ellentv.R
+import com.reybel.ellentv.BuildConfig
 import com.reybel.ellentv.data.api.EpgGridResponse
 import com.reybel.ellentv.data.api.EpgProgram
 import com.reybel.ellentv.data.api.LiveItem
@@ -84,6 +85,7 @@ private const val INITIAL_EPG_HOURS = 4
 private const val INITIAL_EPG_CHANNELS = 30
 private const val FULL_EPG_HOURS = 8
 private const val FULL_EPG_CHANNELS = 80
+private val DEBUG_LOGS_ENABLED = BuildConfig.DEBUG
 
 
 @OptIn(UnstableApi::class)
@@ -224,7 +226,7 @@ fun TvHomeScreen(
             savedAt = System.currentTimeMillis()
         )
 
-        scope.launch(Dispatchers.IO) {
+        scope.launch {
             guideCache.save(payload)
         }
     }
@@ -288,7 +290,7 @@ fun TvHomeScreen(
     val player by playerManager.playerFlow.collectAsState()
 
     LaunchedEffect(Unit) {
-        val cached = withContext(Dispatchers.IO) { guideCache.load() }
+        val cached = guideCache.load()
         if (cached != null) {
             providerId = cached.providerId
             channels = sortChannels(cached.channels)
@@ -561,7 +563,7 @@ fun TvHomeScreen(
                     )
                 }
 
-                if (Log.isLoggable("EPG_RAW", Log.DEBUG)) {
+                if (DEBUG_LOGS_ENABLED && Log.isLoggable("EPG_RAW", Log.DEBUG)) {
                     launch(Dispatchers.IO) {
                         runCatching {
                             val liveRaw = repo.fetchLiveRaw(pid)

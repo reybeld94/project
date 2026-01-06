@@ -1,5 +1,6 @@
 package com.reybel.ellentv.data.api
 
+import com.reybel.ellentv.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -13,12 +14,16 @@ object ApiClient {
 
     const val BASE_URL = "http://10.0.0.188:8000/"
 
+    private val httpLoggingLevel = if (BuildConfig.DEBUG) {
+        HttpLoggingInterceptor.Level.BODY
+    } else {
+        HttpLoggingInterceptor.Level.NONE
+    }
 
     private val http = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = httpLoggingLevel
         })
-
         .build()
 
     private val moshi = Moshi.Builder()
