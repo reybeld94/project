@@ -1,0 +1,36 @@
+# --- General ---
+.DS_Store
+Thumbs.db
+
+# --- Android / Gradle / Android Studio ---
+**/.idea/
+**/*.iml
+**/.gradle/
+**/build/
+**/.externalNativeBuild/
+**/.cxx/
+**/local.properties
+**/captures/
+**/*.apk
+**/*.aab
+
+# --- Kotlin/Java ---
+**/out/
+
+# --- Python / FastAPI ---
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.venv/
+**/venv/
+**/.env
+**/*.log
+
+# --- Databases / local runtime stuff ---
+**/*.sqlite3
+**/*.db
+
+# --- Node (si tu UI/build usa node) ---
+**/node_modules/
+**/dist/

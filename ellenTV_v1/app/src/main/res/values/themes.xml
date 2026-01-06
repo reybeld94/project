@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.EllenTV" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Quita Title/ActionBar -->
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+
+        <!-- Fullscreen (ayuda, pero igual ocultamos system bars por código) -->
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
