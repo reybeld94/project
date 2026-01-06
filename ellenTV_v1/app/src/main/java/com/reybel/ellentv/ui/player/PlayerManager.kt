@@ -52,6 +52,7 @@ class PlayerManager(context: Context) {
     private var lastBufferedPos = 0L
     private var lastBufferedProgressAt = 0L
     private var lastNoProgressReconnectAt = 0L
+    private var liveStallRecoveryAttempts = 0
 
     // Buffer adaptativo
     private var rebufferCount = 0
@@ -388,6 +389,7 @@ class PlayerManager(context: Context) {
         if (progressed) {
             lastBufferedPos = bp
             lastBufferedProgressAt = now
+            liveStallRecoveryAttempts = 0
             return
         }
 
@@ -404,12 +406,47 @@ class PlayerManager(context: Context) {
             onHealthIssue?.invoke("Buffer no progresa")
 
             if (!isVodContent) {
-                attemptReconnect()
+                val recovered = trySoftLiveRecovery()
+
+                if (!recovered) {
+                    attemptReconnect()
+                    liveStallRecoveryAttempts = 0
+                }
             }
 
             lastBufferedProgressAt = now
             lastBufferedPos = bp
         }
+    }
+
+    private fun trySoftLiveRecovery(): Boolean {
+        val p = player
+
+        if (isVodContent) return false
+        if (liveStallRecoveryAttempts >= 2) return false
+        if (p.mediaItemCount == 0) return false
+
+        liveStallRecoveryAttempts++
+        val target = (p.currentPosition - 1500L).coerceAtLeast(0L)
+        val wasPlaying = p.isPlaying
+
+        Log.w(
+            "ELLENTV_HEALTH",
+            "Soft live recovery #$liveStallRecoveryAttempts (seekTo=${target}ms)"
+        )
+
+        scope.launch {
+            try {
+                p.playWhenReady = false
+                p.seekTo(target)
+                p.prepare()
+                p.playWhenReady = wasPlaying || p.playWhenReady
+            } catch (e: Exception) {
+                Log.e("ELLENTV_HEALTH", "Soft recovery failed", e)
+            }
+        }
+
+        return true
     }
 
     private fun checkStreamHealth() {
@@ -517,6 +554,7 @@ class PlayerManager(context: Context) {
         rebufferCount = 0
         lastRebufferTime = 0L
         needsBufferUpgrade = false
+        liveStallRecoveryAttempts = 0
 
         if (bufferLevel != BufferLevel.NORMAL) {
             bufferLevel = BufferLevel.NORMAL
@@ -576,6 +614,7 @@ class PlayerManager(context: Context) {
         lastBufferedPos = 0L
         lastBufferedProgressAt = 0L
         lastNoProgressReconnectAt = 0L
+        liveStallRecoveryAttempts = 0
 
         Log.i("ELLENTV_PLAYER", "Setting VOD URL (60s timeout): $url")
 
