@@ -353,7 +353,9 @@ fun TvHomeScreen(
     }
 
     val bootDataReady = remember(channels, epgGrid) {
-        channels.isNotEmpty() || epgGrid != null
+        val hasChannels = channels.isNotEmpty()
+        val hasEpgData = epgGrid?.items?.isNotEmpty() == true
+        hasChannels && hasEpgData
     }
 
     LaunchedEffect(bootDataReady) {
