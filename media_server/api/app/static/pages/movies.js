@@ -96,8 +96,18 @@ function posterBox(url, { rounded="rounded-xl" } = {}) {
 function approvalPill(v) {
   return v ? badge("APPROVED", "green") : badge("PENDING", "zinc");
 }
+
+function normalizeTmdbStatus(status) {
+  return typeof status === "string" ? status.trim().toLowerCase() : "";
+}
+
+function isTmdbSynced(status) {
+  const normalized = normalizeTmdbStatus(status);
+  return normalized === "synced" || normalized === "sync";
+}
+
 function movieMainTitle(x) {
-  const hasTmdbTitle = x?.tmdb_status === "synced" && x?.tmdb_title;
+  const hasTmdbTitle = isTmdbSynced(x?.tmdb_status) && x?.tmdb_title;
   return hasTmdbTitle ? x.tmdb_title : (x.normalized_name || x.name || "—");
 }
 
@@ -204,8 +214,11 @@ export function MoviesPage(appState) {
   const restored = readGridState(MOVIES_GRID_KEY);
   if (restored) {
     if (typeof restored.q === "string") { q = restored.q; appState.movies.q = restored.q; }
-    if (restored.synced === true || restored.synced === false || restored.synced === null) {
-        synced = restored.synced; appState.movies.synced = restored.synced;
+    if (restored.synced === true || restored.synced === null) {
+      synced = restored.synced; appState.movies.synced = restored.synced;
+    } else if (restored.synced === false) {
+      // Filtro “Needs Sync” eliminado: reseteamos estados viejos a null.
+      synced = null; appState.movies.synced = null;
     }
 
     if (restored.approved === true || restored.approved === false || restored.approved === null) {
@@ -266,10 +279,11 @@ export function MoviesPage(appState) {
         }, "✎"),
       ]);
 
+      const tmdbStatus = normalizeTmdbStatus(item.tmdb_status);
       const tmdbStatusBadge =
-  item.tmdb_status === "synced" ? badge("SYNCED", "green") :
-  item.tmdb_status === "missing" ? badge("NO TMDB", "amber") :
-  item.tmdb_status === "failed" ? badge("TMDB FAIL", "red") :
+  isTmdbSynced(item.tmdb_status) ? badge("SYNCED", "green") :
+  tmdbStatus === "missing" ? badge("NO TMDB", "amber") :
+  tmdbStatus === "failed" ? badge("TMDB FAIL", "red") :
   badge("NO TMDB", "zinc");
 
 
@@ -361,18 +375,6 @@ function renderFilters() {
     small:true,
     onClick: () => {
       synced = (synced === true) ? null : true;
-      appState.movies.synced = synced;
-      offset = 0; appState.movies.offset = 0;
-      renderFilters();
-      reload();
-    }
-  }));
-
-  filterBar.appendChild(button("Needs Sync", {
-    tone: synced === false ? "blue" : "zinc",
-    small:true,
-    onClick: () => {
-      synced = (synced === false) ? null : false;
       appState.movies.synced = synced;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
