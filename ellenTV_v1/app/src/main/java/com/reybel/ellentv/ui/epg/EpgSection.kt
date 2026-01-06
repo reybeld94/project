@@ -1,5 +1,6 @@
 package com.reybel.ellentv.ui.epg
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.derivedStateOf
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
@@ -14,9 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
@@ -63,7 +64,9 @@ import com.reybel.ellentv.ui.absUrl
 import com.reybel.ellentv.ui.clampProgramsStatic
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
 import com.reybel.ellentv.ui.drawNowLine
+import com.reybel.ellentv.ui.maxInstant
 import com.reybel.ellentv.ui.minutesToWidth
+import com.reybel.ellentv.ui.minInstant
 import com.reybel.ellentv.ui.parseInstantFlexible
 import com.reybel.ellentv.ui.roundDownToHalfHour
 import com.reybel.ellentv.ui.roundUpToHalfHour
@@ -72,6 +75,26 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private const val DEFAULT_VISIBLE_WINDOW_MINUTES = 180L // 3 horas
+private const val EXPANSION_MINUTES = 60L
+private const val MIN_WINDOW_MINUTES = 60L
+
+private fun buildTimeWindow(start: Instant, end: Instant, hourWidth: Dp): TimeWindow {
+    val safeEnd = if (end.isAfter(start)) end else start.plus(Duration.ofMinutes(1))
+    val durationMinutes = Duration.between(start, safeEnd).toMinutes().coerceAtLeast(1)
+    val totalWidth = minutesToWidth(durationMinutes, hourWidth)
+    return TimeWindow(start, safeEnd, durationMinutes, totalWidth)
+}
+
+private fun limitTimeWindow(base: TimeWindow, hourWidth: Dp, desiredMinutes: Long): TimeWindow {
+    val target = desiredMinutes
+        .coerceAtLeast(MIN_WINDOW_MINUTES)
+        .coerceAtMost(base.durationMinutes)
+
+    val newEnd = minInstant(base.start.plus(Duration.ofMinutes(target)), base.end)
+    return buildTimeWindow(base.start, newEnd, hourWidth)
+}
 
 @Composable
 fun EpgSection(
@@ -86,6 +109,16 @@ fun EpgSection(
     onChannelColumnFocusChanged: (Boolean) -> Unit = {}, // 🔧 NUEVO callback
     modifier: Modifier = Modifier
 ) {
+    var cachedGrid by remember { mutableStateOf<EpgGridResponse?>(null) }
+
+    LaunchedEffect(epgGrid) {
+        if (epgGrid != null) {
+            cachedGrid = epgGrid
+        }
+    }
+
+    val grid = epgGrid ?: cachedGrid
+
     Box(
         modifier = modifier
             .clip(
@@ -116,35 +149,38 @@ fun EpgSection(
                 Spacer(Modifier.height(8.dp))
             }
 
-            val grid = epgGrid
             if (grid == null) {
-                Text("Cargando guía...", color = Color.White)
+                EpgSkeleton(channels)
             } else {
                 // Pre-procesar datos UNA VEZ
-                val channelMap = remember(channels) {
-                    channels.associateBy { it.id }
+                val channelMap by remember(channels) {
+                    derivedStateOf { channels.associateBy { it.id } }
                 }
 
-                val allowedIds = remember(channels) {
-                    channels.map { it.id }.toSet()
+                val allowedIds by remember(channels) {
+                    derivedStateOf { channels.map { it.id }.toSet() }
                 }
 
-                val filteredItems = remember(grid, allowedIds, channelMap) {
-                    grid.items
-                        .filter { it.liveId in allowedIds }
-                        .sortedWith { a, b ->
-                            val an = channelMap[a.liveId]?.channelNumber ?: Int.MAX_VALUE
-                            val bn = channelMap[b.liveId]?.channelNumber ?: Int.MAX_VALUE
-                            val c = an.compareTo(bn)
-                            if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
-                        }
+                val filteredItems by remember(grid, allowedIds, channelMap) {
+                    derivedStateOf {
+                        grid.items
+                            .filter { it.liveId in allowedIds }
+                            .sortedWith { a, b ->
+                                val an = channelMap[a.liveId]?.channelNumber ?: Int.MAX_VALUE
+                                val bn = channelMap[b.liveId]?.channelNumber ?: Int.MAX_VALUE
+                                val c = an.compareTo(bn)
+                                if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
+                            }
+                    }
                 }
 
-                val filteredGrid = remember(grid, filteredItems) {
-                    grid.copy(
-                        count = filteredItems.size,
-                        items = filteredItems
-                    )
+                val filteredGrid by remember(grid, filteredItems) {
+                    derivedStateOf {
+                        grid.copy(
+                            count = filteredItems.size,
+                            items = filteredItems
+                        )
+                    }
                 }
 
                 EpgGridView(
@@ -159,6 +195,77 @@ fun EpgSection(
             }
         }
     }
+}
+
+@Composable
+fun EpgSkeleton(channels: List<LiveItem>) {
+    val channelColWidth = 200.dp
+    val rowHeight = 64.dp
+    val placeholderRows = if (channels.isEmpty()) 6 else channels.size.coerceAtMost(8)
+    val barColor = Color.White.copy(alpha = 0.08f)
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.Black.copy(alpha = 0.30f))
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .width(channelColWidth)
+                        .height(16.dp),
+                    color = barColor
+                )
+                Spacer(Modifier.width(12.dp))
+                SkeletonBlock(
+                    modifier = Modifier
+                        .height(16.dp)
+                        .fillMaxWidth(),
+                    color = barColor
+                )
+            }
+        }
+
+        repeat(placeholderRows) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(rowHeight),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .width(channelColWidth)
+                        .height(rowHeight)
+                        .clip(RoundedCornerShape(10.dp)),
+                    color = barColor
+                )
+                Spacer(Modifier.width(12.dp))
+                SkeletonBlock(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp)),
+                    color = barColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonBlock(modifier: Modifier, color: Color) {
+    Box(
+        modifier = modifier.background(color)
+    )
 }
 
 @OptIn(UnstableApi::class)
@@ -196,15 +303,59 @@ fun EpgGridView(
     val fmt = remember { DateTimeFormatter.ofPattern("h:mm a", Locale.US) }
     val hourWidth: Dp = 340.dp
 
-    val timeWindow = remember(grid.window) {
-        val apiStart = parseInstantFlexible(grid.window.start)
-        val apiEnd = parseInstantFlexible(grid.window.end)
-        val windowStart = roundDownToHalfHour(apiStart)
-        val windowEnd = roundUpToHalfHour(apiEnd)
-        val windowMinutes = Duration.between(windowStart, windowEnd).toMinutes().coerceAtLeast(1)
-        val totalWidth = minutesToWidth(windowMinutes, hourWidth)
+    val baseTimeWindow by remember(grid.window) {
+        derivedStateOf {
+            val apiStart = parseInstantFlexible(grid.window.start)
+            val apiEnd = parseInstantFlexible(grid.window.end)
+            val windowStart = roundDownToHalfHour(apiStart)
+            val windowEnd = roundUpToHalfHour(apiEnd)
+            val windowMinutes = Duration.between(windowStart, windowEnd).toMinutes().coerceAtLeast(1)
+            val totalWidth = minutesToWidth(windowMinutes, hourWidth)
 
-        TimeWindow(windowStart, windowEnd, windowMinutes, totalWidth)
+            TimeWindow(windowStart, windowEnd, windowMinutes, totalWidth)
+        }
+    }
+
+    var visibleTimeWindow by remember(baseTimeWindow) {
+        mutableStateOf(limitTimeWindow(baseTimeWindow, hourWidth, DEFAULT_VISIBLE_WINDOW_MINUTES))
+    }
+
+    LaunchedEffect(baseTimeWindow) {
+        visibleTimeWindow = limitTimeWindow(baseTimeWindow, hourWidth, DEFAULT_VISIBLE_WINDOW_MINUTES)
+    }
+
+    LaunchedEffect(horizontalListState, baseTimeWindow, hourWidth) {
+        snapshotFlow {
+            val info = horizontalListState.layoutInfo
+            val first = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = info.totalItemsCount
+            Triple(first, last, total)
+        }.collect { (first, last, total) ->
+            if (total == 0) return@collect
+
+            var updated = visibleTimeWindow
+
+            if (last >= total - 2 && updated.end.isBefore(baseTimeWindow.end)) {
+                val newEnd = minInstant(
+                    baseTimeWindow.end,
+                    updated.end.plus(Duration.ofMinutes(EXPANSION_MINUTES))
+                )
+                updated = buildTimeWindow(updated.start, newEnd, hourWidth)
+            }
+
+            if (first <= 1 && updated.start.isAfter(baseTimeWindow.start)) {
+                val newStart = maxInstant(
+                    baseTimeWindow.start,
+                    updated.start.minus(Duration.ofMinutes(EXPANSION_MINUTES))
+                )
+                updated = buildTimeWindow(newStart, updated.end, hourWidth)
+            }
+
+            if (updated != visibleTimeWindow) {
+                visibleTimeWindow = updated
+            }
+        }
     }
 
     // Pre-procesar filas en BACKGROUND con caché
@@ -212,7 +363,7 @@ fun EpgGridView(
         initialValue = emptyList(),
         key1 = grid.items,
         key2 = channelMap,
-        key3 = timeWindow
+        key3 = visibleTimeWindow
     ) {
         value = withContext(Dispatchers.Default) {
             grid.items.map { row ->
@@ -234,8 +385,8 @@ fun EpgGridView(
 
                 val clampedPrograms = clampProgramsStatic(
                     row.programs ?: emptyList(),
-                    timeWindow.start,
-                    timeWindow.end
+                    visibleTimeWindow.start,
+                    visibleTimeWindow.end
                 )
 
                 EpgRowData(row.liveId, channelData, clampedPrograms)
@@ -243,8 +394,18 @@ fun EpgGridView(
         }
     }
 
-    if (epgRowsData.isEmpty()) {
-        Text("Preparando guía…", color = Color.White)
+    var cachedRows by remember { mutableStateOf<List<EpgRowData>>(emptyList()) }
+
+    LaunchedEffect(epgRowsData) {
+        if (epgRowsData.isNotEmpty()) {
+            cachedRows = epgRowsData
+        }
+    }
+
+    val rowsToRender = if (epgRowsData.isNotEmpty()) epgRowsData else cachedRows
+
+    if (rowsToRender.isEmpty()) {
+        EpgSkeleton(channelMap.values.toList())
         return
     }
 
@@ -280,7 +441,7 @@ fun EpgGridView(
 
             Box(
                 modifier = Modifier
-                    .width(timeWindow.totalWidth)
+                    .width(visibleTimeWindow.totalWidth)
                     .fillMaxHeight()
             ) {
                 LazyRow(
@@ -288,9 +449,9 @@ fun EpgGridView(
                     modifier = Modifier.fillMaxHeight(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val startZ = timeWindow.start.atZone(zone)
+                    val startZ = visibleTimeWindow.start.atZone(zone)
                     val halfHourWidth = hourWidth / 2
-                    val steps = (timeWindow.durationMinutes / 30).toInt()
+                    val steps = (visibleTimeWindow.durationMinutes / 30).toInt()
 
                     items(count = steps + 1, key = { it }) { i ->
                         val t = startZ.plusMinutes((i * 30).toLong())
@@ -312,7 +473,7 @@ fun EpgGridView(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .drawNowLine(now, timeWindow.start, timeWindow.end)
+                        .drawNowLine(now, visibleTimeWindow.start, visibleTimeWindow.end)
                 )
             }
         }
@@ -329,7 +490,7 @@ fun EpgGridView(
         userScrollEnabled = true
     ) {
         items(
-            items = epgRowsData,
+            items = rowsToRender,
             key = { it.liveId },
             contentType = { "epg_row" }
         ) { rowData ->
@@ -337,7 +498,7 @@ fun EpgGridView(
             EpgRow(
                 rowData = rowData,
                 isSelected = isSelected,
-                timeWindow = timeWindow,
+                timeWindow = visibleTimeWindow,
                 now = now,
                 horizontalState = horizontalListState,
                 channelColWidth = channelColWidth,
