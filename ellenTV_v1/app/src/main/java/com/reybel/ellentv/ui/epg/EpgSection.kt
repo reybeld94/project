@@ -1,10 +1,9 @@
 package com.reybel.ellentv.ui.epg
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.produceState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -335,11 +334,16 @@ fun EpgGridView(
         val idx = grid.items.indexOfFirst { it.liveId == id }
         if (idx < 0) return@LaunchedEffect
 
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.isNotEmpty() }
-            .distinctUntilChanged()
-            .first { it }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
+            .first { it.isNotEmpty() }
 
-        listState.scrollToItem(idx)
+        val visibleItems = listState.layoutInfo.visibleItemsInfo
+        val firstVisible = visibleItems.first().index
+        val lastVisible = visibleItems.last().index
+
+        if (idx < firstVisible || idx > lastVisible) {
+            listState.scrollToItem(idx)
+        }
     }
 
     val horizontalListState = rememberLazyListState()
