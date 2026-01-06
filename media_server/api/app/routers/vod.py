@@ -111,10 +111,15 @@ def list_vod_all(
     if approved is not None:
         stmt = stmt.where(VodStream.approved == approved)
 
+    # Normaliza comparaciones de TMDB para tolerar mayúsculas y variantes "sync".
+    tmdb_synced_values = ["synced", "sync"]
     if synced is True:
-        stmt = stmt.where(VodStream.tmdb_status == "synced")
+        stmt = stmt.where(func.lower(VodStream.tmdb_status).in_(tmdb_synced_values))
     elif synced is False:
-        stmt = stmt.where(or_(VodStream.tmdb_status != "synced", VodStream.tmdb_status == None))
+        stmt = stmt.where(or_(
+            VodStream.tmdb_status == None,
+            func.lower(VodStream.tmdb_status).not_in(tmdb_synced_values),
+        ))
 
 
     if q:
