@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -69,6 +70,8 @@ import com.reybel.ellentv.data.api.EpgGridResponse
 import com.reybel.ellentv.data.api.EpgProgram
 import com.reybel.ellentv.data.api.LiveItem
 import com.reybel.ellentv.data.repo.ChannelRepo
+import com.reybel.ellentv.data.repo.GuideCache
+import com.reybel.ellentv.data.repo.GuideCachePayload
 
 import kotlinx.coroutines.delay
 
@@ -136,6 +139,8 @@ fun TvHomeScreen(
     seriesVm: com.reybel.ellentv.ui.series.SeriesViewModel
 ) {
     val ui by vm.ui.collectAsState()
+    val context = LocalContext.current.applicationContext
+    val guideCache = remember { GuideCache(context) }
 
     var epgGrid by remember { mutableStateOf<EpgGridResponse?>(null) }
     var epgError by remember { mutableStateOf<String?>(null) }
@@ -171,6 +176,19 @@ fun TvHomeScreen(
     // 🔧 NUEVO: Track si estamos en el borde izquierdo del EPG (columna de canales)
     var epgOnChannelColumn by remember { mutableStateOf(false) }
 
+    var channels by remember { mutableStateOf(emptyList<LiveItem>()) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+
+    var error by remember { mutableStateOf<String?>(null) }
+
+    var streamUrl by remember { mutableStateOf("") }
+    var streamAlt1 by remember { mutableStateOf("") }
+    var streamAlt2 by remember { mutableStateOf("") }
+    var streamAlt3 by remember { mutableStateOf("") }
+    var isFullscreen by remember { mutableStateOf(false) }
+
+    val fullscreenFocus = remember { FocusRequester() }
+
     fun setBrowseDebounced(liveId: String?, program: EpgProgram?) {
         if (liveId == browseLiveId && program == browseProgram) return
 
@@ -184,6 +202,32 @@ fun TvHomeScreen(
     }
 
     val repo = remember { ChannelRepo() }
+    fun sortChannels(items: List<LiveItem>): List<LiveItem> {
+        return items.sortedWith { a, b ->
+            val an = a.channelNumber ?: Int.MAX_VALUE
+            val bn = b.channelNumber ?: Int.MAX_VALUE
+            val c = an.compareTo(bn)
+            if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
+        }
+    }
+
+    fun persistGuideSnapshot(grid: EpgGridResponse? = epgGrid) {
+        val pid = providerId ?: return
+        val currentGrid = grid ?: return
+        if (channels.isEmpty()) return
+
+        val payload = GuideCachePayload(
+            providerId = pid,
+            channels = channels,
+            epg = currentGrid,
+            selectedLiveId = selectedId,
+            savedAt = System.currentTimeMillis()
+        )
+
+        scope.launch(Dispatchers.IO) {
+            guideCache.save(payload)
+        }
+    }
 
     fun requestedEpgHours(): Int {
         val minutes = epgGrid?.let { epgWindowDurationMinutes(it) } ?: (FULL_EPG_HOURS * 60)
@@ -223,6 +267,7 @@ fun TvHomeScreen(
             epgGrid = merged
             lastEpgFetchAt = System.currentTimeMillis()
             epgError = null
+            persistGuideSnapshot(merged)
 
             Log.i(
                 "ELLENTV_EPG",
@@ -236,24 +281,27 @@ fun TvHomeScreen(
         }
     }
 
-    var channels by remember { mutableStateOf(emptyList<LiveItem>()) }
-    var selectedId by remember { mutableStateOf<String?>(null) }
-
-    var error by remember { mutableStateOf<String?>(null) }
-
-    var streamUrl by remember { mutableStateOf("") }
-    var streamAlt1 by remember { mutableStateOf("") }
-    var streamAlt2 by remember { mutableStateOf("") }
-    var streamAlt3 by remember { mutableStateOf("") }
-    var isFullscreen by remember { mutableStateOf(false) }
-
-    val fullscreenFocus = remember { FocusRequester() }
-
     LaunchedEffect(isFullscreen) {
         if (isFullscreen) fullscreenFocus.requestFocus()
     }
 
     val player by playerManager.playerFlow.collectAsState()
+
+    LaunchedEffect(Unit) {
+        val cached = withContext(Dispatchers.IO) { guideCache.load() }
+        if (cached != null) {
+            providerId = cached.providerId
+            channels = sortChannels(cached.channels)
+            epgGrid = cached.epg
+            lastEpgFetchAt = cached.savedAt
+
+            val restoredSelected = cached.selectedLiveId?.takeIf { id ->
+                cached.channels.any { it.id == id }
+            }
+            selectedId = restoredSelected ?: cached.channels.firstOrNull()?.id
+            browseLiveId = selectedId
+        }
+    }
 
     // ===== Boot / First-load overlay =====
     var showBoot by remember { mutableStateOf(true) }
@@ -262,29 +310,30 @@ fun TvHomeScreen(
     var isPlayerReady by remember { mutableStateOf(false) }
 
     var savedVolume by remember { mutableStateOf(1f) }
-
-    LaunchedEffect(showBoot, player) {
-        if (showBoot) {
-            savedVolume = player.volume
-            player.volume = 0f
-        } else {
-            player.volume = savedVolume
-        }
-    }
-
-    LaunchedEffect(showBoot, streamUrl) {
-        if (!showBoot) {
-            player.volume = savedVolume
-        }
-    }
+    var mutedForConnect by remember { mutableStateOf(false) }
 
     LaunchedEffect(player) {
-        isPlayerReady = false
         snapshotFlow { player.playbackState }
             .distinctUntilChanged()
             .collect { st ->
-                if (st == Player.STATE_READY) isPlayerReady = true
+                isPlayerReady = st == Player.STATE_READY
             }
+    }
+
+    LaunchedEffect(isBuffering, isPlayerReady, streamUrl, streamAlt1, streamAlt2, streamAlt3) {
+        val hasStreamRequest = streamUrl.isNotBlank() || streamAlt1.isNotBlank() || streamAlt2.isNotBlank() || streamAlt3.isNotBlank()
+        val shouldMute = isBuffering || (!isPlayerReady && hasStreamRequest)
+
+        if (shouldMute) {
+            if (!mutedForConnect) {
+                savedVolume = player.volume
+                player.volume = 0f
+                mutedForConnect = true
+            }
+        } else if (mutedForConnect) {
+            player.volume = savedVolume
+            mutedForConnect = false
+        }
     }
 
     LaunchedEffect(showBoot, isFullscreen) {
@@ -292,22 +341,21 @@ fun TvHomeScreen(
     }
 
     val bootDataReady = remember(channels, epgGrid) {
-        channels.isNotEmpty() && epgGrid != null
+        channels.isNotEmpty() || epgGrid != null
     }
 
-    LaunchedEffect(bootDataReady, isPlayerReady) {
-        if (showBoot && bootDataReady && isPlayerReady) {
+    LaunchedEffect(bootDataReady) {
+        if (showBoot && bootDataReady) {
             bootProgress = 1f
             delay(350)
             showBoot = false
         }
     }
 
-    LaunchedEffect(bootDataReady) {
-        if (showBoot && bootDataReady) {
-            delay(12_000)
-            if (showBoot) showBoot = false
-        }
+    LaunchedEffect(showBoot) {
+        if (!showBoot) return@LaunchedEffect
+        delay(12_000)
+        if (showBoot) showBoot = false
     }
 
     // 🎬 Abrir VOD o Series según la sección actual
@@ -469,36 +517,39 @@ fun TvHomeScreen(
 
                 val items = channelsDeferred.await()
                 val gridResp = epgDeferred.await()
+                val sortedChannels = sortChannels(items)
 
-                channels = items.sortedWith { a, b ->
-                    val an = a.channelNumber ?: Int.MAX_VALUE
-                    val bn = b.channelNumber ?: Int.MAX_VALUE
-                    val c = an.compareTo(bn)
-                    if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
-                }
+                channels = sortedChannels
 
-                epgGrid = gridResp
+                val mergedGrid = mergeEpgGrids(epgGrid, gridResp, preserveExistingWindow = true)
+                epgGrid = mergedGrid
                 lastEpgFetchAt = System.currentTimeMillis()
                 bootTitle = "Preparing video preview…"
                 bootProgress = 0.80f
                 epgError = null
 
-                val allowed = items.map { it.id }.toSet()
+                val allowed = sortedChannels.map { it.id }.toSet()
 
                 val preferredId =
-                    gridResp.items.firstOrNull { it.liveId in allowed && it.epgSourceId != null && it.programs.isNotEmpty() }?.liveId
-                        ?: items.firstOrNull()?.id
+                    mergedGrid.items.firstOrNull { it.liveId in allowed && it.epgSourceId != null && it.programs.isNotEmpty() }?.liveId
+                        ?: sortedChannels.firstOrNull()?.id
 
-                selectedId = preferredId
-                error = if (items.isEmpty()) "No hay canales. ¿Tienes approved=true?" else null
+                val keepSelected = selectedId?.takeIf { it in allowed }
+                val chosenId = keepSelected ?: preferredId
 
-                if (!preferredId.isNullOrBlank()) {
+                selectedId = chosenId
+                browseLiveId = browseLiveId ?: chosenId
+                error = if (sortedChannels.isEmpty()) "No hay canales. ¿Tienes approved=true?" else null
+
+                if (!chosenId.isNullOrBlank()) {
                     bootProgress = 0.92f
                     bootTitle = "Almost ready…"
-                    streamUrl = withContext(Dispatchers.IO) { repo.fetchPlayUrl(preferredId) }
+                    streamUrl = withContext(Dispatchers.IO) { repo.fetchPlayUrl(chosenId) }
                 } else {
                     streamUrl = ""
                 }
+
+                persistGuideSnapshot(mergedGrid)
 
                 scope.launch {
                     fetchAndMergeEpg(
@@ -557,7 +608,7 @@ fun TvHomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
-                if (showBoot || isFullscreen) return@onPreviewKeyEvent false
+                if (isFullscreen) return@onPreviewKeyEvent false
 
                 val ne = event.nativeKeyEvent
                 if (ne.action != KeyEvent.ACTION_UP) return@onPreviewKeyEvent false
@@ -738,8 +789,6 @@ fun TvHomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusable()
-                    .onPreviewKeyEvent { true }
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.background),
