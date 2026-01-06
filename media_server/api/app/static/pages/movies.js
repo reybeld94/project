@@ -221,6 +221,8 @@ export function MoviesPage(appState) {
     el("div", { class:"p-5 text-sm text-zinc-300" }, "Cargando películas…")
   ]);
 
+  const reload = () => load().catch(err => { status.textContent = `Error: ${err.message}`; });
+
   async function load() {
     status.textContent = "Cargando…";
     renderSkeletonGrid(gridWrap, Math.min(limit, 24));
@@ -260,7 +262,7 @@ export function MoviesPage(appState) {
           class:"absolute top-2 right-2 w-9 h-9 rounded-xl bg-black/40 border border-white/10 text-zinc-100 hover:bg-black/60 transition",
           type:"button",
           title:"Edit",
-          onclick: (e) => { e.stopPropagation(); openMovieEditModal(item, load); }
+          onclick: (e) => { e.stopPropagation(); openMovieEditModal(item, reload); }
         }, "✎"),
       ]);
 
@@ -303,13 +305,13 @@ export function MoviesPage(appState) {
             if (!canPrev) return;
             offset = Math.max(0, offset - limit);
             appState.movies.offset = offset;
-            load();
+            reload();
           }}),
           button("Next", { tone:"zinc", small:true, onClick: () => {
             if (!canNext) return;
             offset = offset + limit;
             appState.movies.offset = offset;
-            load();
+            reload();
           }}),
         ])
       ])
@@ -328,7 +330,7 @@ function renderFilters() {
       approved = null; appState.movies.approved = null;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
-      load();
+      reload();
     }
   }));
 
@@ -339,7 +341,7 @@ function renderFilters() {
       approved = true; appState.movies.approved = true;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
-      load();
+      reload();
     }
   }));
 
@@ -350,7 +352,7 @@ function renderFilters() {
       approved = false; appState.movies.approved = false;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
-      load();
+      reload();
     }
   }));
 
@@ -362,7 +364,7 @@ function renderFilters() {
       appState.movies.synced = synced;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
-      load();
+      reload();
     }
   }));
 
@@ -374,7 +376,7 @@ function renderFilters() {
       appState.movies.synced = synced;
       offset = 0; appState.movies.offset = 0;
       renderFilters();
-      load();
+      reload();
     }
   }));
 }
@@ -389,7 +391,7 @@ renderFilters();
         value:q,
         onInput:(v)=>{ q=v; appState.movies.q=v; }
       })),
-      button("Search", { tone:"blue", onClick:()=>{ offset=0; appState.movies.offset=0; load(); } }),
+      button("Search", { tone:"blue", onClick:()=>{ offset=0; appState.movies.offset=0; reload(); } }),
     ]),
     el("div", { class:"w-full flex items-center justify-between" }, [ filterBar, status ])
   ]);
@@ -401,7 +403,7 @@ renderFilters();
     content: el("div", { class:"h-full min-h-0 overflow-hidden" }, gridWrap),
   });
 
-  load().catch(err => { status.textContent = `Error: ${err.message}`; });
+  reload();
   return node;
 }
 
