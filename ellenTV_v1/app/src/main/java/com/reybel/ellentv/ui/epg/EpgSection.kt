@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -517,7 +516,7 @@ fun EpgGridView(
                 }
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .fillMaxSize()
                         .drawNowLine(now, visibleTimeWindow.start, visibleTimeWindow.end)
                 )
             }
@@ -616,7 +615,7 @@ fun EpgRow(
 
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxSize()
                     .drawNowLine(now, timeWindow.start, timeWindow.end)
             )
         }
