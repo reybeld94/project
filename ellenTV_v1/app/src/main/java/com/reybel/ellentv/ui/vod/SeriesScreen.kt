@@ -25,6 +25,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
+import com.reybel.ellentv.ui.components.CategorySkeletonList
+import com.reybel.ellentv.ui.components.PosterSkeletonCard
+import com.reybel.ellentv.ui.components.PosterSkeletonGrid
 import com.reybel.ellentv.ui.vod.VodUiState
 
 @Composable
@@ -71,7 +74,7 @@ fun SeriesScreen(
                 Spacer(Modifier.height(10.dp))
 
                 if (ui.isLoadingCats) {
-                    Text("Loading categories…", color = Color.White.copy(alpha = 0.75f))
+                    CategorySkeletonList()
                 } else if (ui.categories.isEmpty()) {
                     Text("No categories", color = Color.White.copy(alpha = 0.75f))
                 } else {
@@ -151,9 +154,7 @@ fun SeriesScreen(
             }
 
             if (ui.items.isEmpty() && ui.isLoadingPage) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Loading series…", color = Color.White.copy(alpha = 0.8f))
-                }
+                PosterSkeletonGrid(modifier = Modifier.fillMaxSize())
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(6),
@@ -237,14 +238,10 @@ fun SeriesScreen(
 
                     if (ui.isLoadingPage && ui.items.isNotEmpty()) {
                         item {
-                            Box(
+                            PosterSkeletonCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(220.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Loading more…", color = Color.White.copy(alpha = 0.7f))
-                            }
+                            )
                         }
                     }
                 }
