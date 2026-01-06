@@ -213,7 +213,6 @@ export function MoviesPage(appState) {
   let restoreScrollTop = null;
   const restored = readGridState(MOVIES_GRID_KEY);
   if (restored) {
-    if (typeof restored.q === "string") { q = restored.q; appState.movies.q = restored.q; }
     if (restored.synced === true || restored.synced === null) {
       synced = restored.synced; appState.movies.synced = restored.synced;
     } else if (restored.synced === false) {
@@ -235,6 +234,16 @@ export function MoviesPage(appState) {
   ]);
 
   const reload = () => load().catch(err => { status.textContent = `Error: ${err.message}`; });
+
+  let searchDebounce = null;
+  const triggerSearch = () => {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      offset = 0;
+      appState.movies.offset = 0;
+      reload();
+    }, 250);
+  };
 
   async function load() {
     status.textContent = "Cargando…";
@@ -263,7 +272,7 @@ export function MoviesPage(appState) {
         onmouseenter: () => prefetchMovie(appState, item.id), // ✅ prefetch desktop
         onfocus: () => prefetchMovie(appState, item.id),      // ✅ prefetch TV
         onclick: () => {
-          writeGridState(MOVIES_GRID_KEY, { q, approved, synced, offset, scrollTop });
+          writeGridState(MOVIES_GRID_KEY, { approved, synced, offset, scrollTop });
           go(`/movies/${item.id}`);
         },
       });
@@ -391,9 +400,12 @@ renderFilters();
       el("div", { class:"flex-1" }, input({
         placeholder:"Search movies (name / normalized)…",
         value:q,
-        onInput:(v)=>{ q=v; appState.movies.q=v; }
-      })),
-      button("Search", { tone:"blue", onClick:()=>{ offset=0; appState.movies.offset=0; reload(); } }),
+        onInput:(v)=>{
+          q=v;
+          appState.movies.q=v;
+          triggerSearch();
+        }
+      }))
     ]),
     el("div", { class:"w-full flex items-center justify-between" }, [ filterBar, status ])
   ]);
