@@ -1,6 +1,6 @@
 package com.reybel.ellentv.ui.epg
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
@@ -47,12 +47,14 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.reybel.ellentv.data.api.EpgGridResponse
 import com.reybel.ellentv.data.api.EpgProgram
 import com.reybel.ellentv.data.api.LiveItem
@@ -62,6 +64,7 @@ import com.reybel.ellentv.ui.EpgRowData
 import com.reybel.ellentv.ui.TimeWindow
 import com.reybel.ellentv.ui.absUrl
 import com.reybel.ellentv.ui.clampProgramsStatic
+import com.reybel.ellentv.ui.components.OPTIMIZED_PLACEHOLDER_MEMORY_KEY
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
 import com.reybel.ellentv.ui.drawNowLine
 import com.reybel.ellentv.ui.maxInstant
@@ -70,6 +73,9 @@ import com.reybel.ellentv.ui.minInstant
 import com.reybel.ellentv.ui.parseInstantFlexible
 import com.reybel.ellentv.ui.roundDownToHalfHour
 import com.reybel.ellentv.ui.roundUpToHalfHour
+import coil.imageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -79,6 +85,7 @@ import java.util.Locale
 private const val DEFAULT_VISIBLE_WINDOW_MINUTES = 180L // 3 horas
 private const val EXPANSION_MINUTES = 60L
 private const val MIN_WINDOW_MINUTES = 60L
+private const val PREFETCH_CHANNEL_COUNT = 12
 
 private fun buildTimeWindow(start: Instant, end: Instant, hourWidth: Dp): TimeWindow {
     val safeEnd = if (end.isAfter(start)) end else start.plus(Duration.ofMinutes(1))
@@ -110,6 +117,44 @@ fun EpgSection(
     modifier: Modifier = Modifier
 ) {
     var cachedGrid by remember { mutableStateOf<EpgGridResponse?>(null) }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val imageLoader = remember(context) { context.imageLoader }
+
+    val logosToPrefetch by remember(channels) {
+        derivedStateOf {
+            channels
+                .sortedBy { it.channelNumber ?: Int.MAX_VALUE }
+                .take(PREFETCH_CHANNEL_COUNT)
+                .mapNotNull { ch ->
+                    absUrl(
+                        ch.customLogoUrl
+                            ?: ch.logo
+                            ?: ch.streamIcon
+                    )
+                }
+        }
+    }
+
+    LaunchedEffect(logosToPrefetch, lifecycleOwner) {
+        if (logosToPrefetch.isEmpty()) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            logosToPrefetch.forEach { logoUrl ->
+                val request = ImageRequest.Builder(context)
+                    .data(logoUrl)
+                    .size(96)
+                    .memoryCacheKey(logoUrl)
+                    .diskCacheKey(logoUrl)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .placeholderMemoryCacheKey(OPTIMIZED_PLACEHOLDER_MEMORY_KEY)
+                    .allowHardware(true)
+                    .lifecycle(lifecycleOwner.lifecycle)
+                    .build()
+                imageLoader.enqueue(request)
+            }
+        }
+    }
 
     LaunchedEffect(epgGrid) {
         if (epgGrid != null) {
