@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta
+import threading
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_
@@ -6,9 +9,14 @@ from sqlalchemy import select, func, or_
 from app.deps import get_db
 from app.models import TmdbConfig, VodStream, SeriesItem
 from app.schemas import TmdbConfigOut, TmdbConfigUpdate, TmdbStatusOut, TmdbActivityOut
-from app.tmdb_client import find_and_fetch_movie, find_and_fetch_tv
+from app.tmdb_client import RateLimiter, find_and_fetch_movie, find_and_fetch_tv, tmdb_get_json
 
 router = APIRouter(prefix="/tmdb", tags=["tmdb"])
+GENRE_CACHE_TTL = timedelta(hours=24)
+GENRE_ALLOWED_KINDS = {"movie", "tv"}
+_genre_cache: dict[tuple[str, str], dict] = {}
+_genre_lock = threading.Lock()
+
 
 def mask(s: str | None, keep: int = 4) -> str | None:
     if not s:
@@ -159,6 +167,58 @@ def tmdb_activity(limit: int = 20, db: Session = Depends(get_db)):
         "server_time": datetime.utcnow().isoformat() + "Z",
         "items": items
     }
+
+
+@router.get("/genres")
+def tmdb_genres(kind: str = "movie", db: Session = Depends(get_db)):
+    kind = (kind or "").strip().lower()
+    if kind not in GENRE_ALLOWED_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"kind inválido. Valores permitidos: {sorted(GENRE_ALLOWED_KINDS)}",
+        )
+
+    cfg = get_or_create_cfg(db)
+    if not cfg.is_enabled:
+        raise HTTPException(status_code=400, detail="TMDB is disabled in settings")
+
+    token = cfg.read_access_token
+    api_key = cfg.api_key
+    if not token and not api_key:
+        raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
+
+    language = cfg.language or "en-US"
+    cache_key = (kind, language)
+    now = datetime.utcnow()
+
+    with _genre_lock:
+        cached = _genre_cache.get(cache_key)
+        if cached and cached["expires_at"] > now:
+            return cached["payload"]
+        if cached:
+            _genre_cache.pop(cache_key, None)
+
+    limiter = RateLimiter(rps=cfg.requests_per_second or 5)
+    with httpx.Client(timeout=20) as client:
+        payload = tmdb_get_json(
+            client,
+            limiter,
+            f"/genre/{kind}/list",
+            token=token,
+            api_key=api_key,
+            params={"language": language},
+        )
+
+    response = {
+        "kind": kind,
+        "language": language,
+        "genres": payload.get("genres") or [],
+    }
+
+    with _genre_lock:
+        _genre_cache[cache_key] = {"payload": response, "expires_at": now + GENRE_CACHE_TTL}
+
+    return response
 
 
 @router.post("/sync/movies")
