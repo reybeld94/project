@@ -488,7 +488,7 @@ def collection_items(
     collection_id_or_slug: str,
     page: int = 1,
     stale_while_revalidate: bool = False,
-    background_tasks: BackgroundTasks | None = None,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     collection = _get_collection_by_identifier(db, collection_id_or_slug)
