@@ -415,6 +415,14 @@ def preview_collection(
     }
 
 
+@router.post("/preview", response_model=CollectionPreviewOut)
+def preview_collection_post(
+    body: CollectionPreviewIn,
+    db: Session = Depends(get_db),
+):
+    return preview_collection(body=body, db=db)
+
+
 @router.get("/{collection_id_or_slug}", response_model=CollectionOut)
 def get_collection(collection_id_or_slug: str, db: Session = Depends(get_db)):
     return _get_collection_by_identifier(db, collection_id_or_slug)

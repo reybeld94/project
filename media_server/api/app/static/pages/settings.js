@@ -4,12 +4,14 @@ import { ProvidersTab } from "./settings/providers.js";
 import { EpgTab } from "./settings/epg.js";
 import { DocsTab } from "./settings/docs.js";
 import { TmdbTab } from "./settings/tmdb.js";
+import { CollectionsTab } from "./settings/collections.js";
 
 const TABS = [
   { key:"providers", label:"Providers" },
   { key:"epg", label:"EPG" },
   { key:"docs", label:"API" },
   { key:"tmdb", label:"TMDB" },
+  { key:"collections", label:"Collections" },
 ];
 
 export function SettingsPage(appState, subRoute) {
@@ -31,6 +33,7 @@ export function SettingsPage(appState, subRoute) {
   else if (current === "epg") content = EpgTab(appState);
   else if (current === "docs") content = DocsTab(appState);
   else if (current === "tmdb") content = TmdbTab(appState);
+  else if (current === "collections") content = CollectionsTab(appState);
   else content = el("div", { class:"text-sm text-zinc-300" }, "Unknown tab");
 
   return el("div", { class:"h-full flex flex-col" }, [

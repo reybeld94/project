@@ -100,15 +100,31 @@ export const api = {
       req(`/epg/channels?source_id=${encodeURIComponent(sourceId)}&q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`),
   },
 
-    tmdb: {
+  tmdb: {
     getConfig: () => req("/tmdb/config"),
     activity: ({ limit=20 }={}) => req(`/tmdb/activity?limit=${limit}`),
     saveConfig: (payload) => req("/tmdb/config", { method:"PATCH", body: payload }),
     status: () => req("/tmdb/status"),
+    genres: ({ kind="movie" }={}) => req(`/tmdb/genres?kind=${encodeURIComponent(kind)}`),
     syncMovies: ({ limit=20, approvedOnly=true }={}) =>
       req(`/tmdb/sync/movies?limit=${limit}&approved_only=${approvedOnly}`, { method:"POST" }),
     syncSeries: ({ limit=20, approvedOnly=true }={}) =>
       req(`/tmdb/sync/series?limit=${limit}&approved_only=${approvedOnly}`, { method:"POST" }),
+  },
+
+
+  collections: {
+    list: ({ q="", enabled=null, source_type="", limit=50, offset=0 }={}) => {
+      const en = enabled === null ? "" : `&enabled=${enabled}`;
+      const src = source_type ? `&source_type=${encodeURIComponent(source_type)}` : "";
+      return req(`/collections?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}${en}${src}`);
+    },
+    create: (payload) => req("/collections", { method:"POST", body: payload }),
+    update: (idOrSlug, payload) => req(`/collections/${encodeURIComponent(idOrSlug)}`, { method:"PATCH", body: payload }),
+    remove: (idOrSlug) => req(`/collections/${encodeURIComponent(idOrSlug)}`, { method:"DELETE" }),
+    preview: (payload) => req("/collections/preview", { method:"POST", body: payload }),
+    items: (idOrSlug, { page=1, stale_while_revalidate=false }={}) =>
+      req(`/collections/${encodeURIComponent(idOrSlug)}/items?page=${page}&stale_while_revalidate=${stale_while_revalidate}`),
   },
 
 
