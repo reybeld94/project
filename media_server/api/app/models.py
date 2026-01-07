@@ -71,6 +71,59 @@ class TmdbConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
+class TmdbCollection(Base):
+    __tablename__ = "tmdb_collections"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_tmdb_collections_slug"),
+        Index("ix_tmdb_collections_slug", "slug"),
+        Index("ix_tmdb_collections_enabled", "enabled"),
+        Index("ix_tmdb_collections_order_index", "order_index"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    source_type: Mapped[str] = mapped_column(String(50), default="tmdb", nullable=False)
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    filters: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cache_ttl_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    cache_entries = relationship("TmdbCollectionCache", back_populates="collection", cascade="all, delete-orphan")
+
+
+class TmdbCollectionCache(Base):
+    __tablename__ = "tmdb_collection_cache"
+    __table_args__ = (
+        UniqueConstraint("collection_id", "page", name="uq_tmdb_collection_cache_collection_page"),
+        Index("ix_tmdb_collection_cache_expires_at", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    collection_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tmdb_collections.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    collection = relationship("TmdbCollection", back_populates="cache_entries", lazy="joined")
+
+    page: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class Category(Base):
     __tablename__ = "categories"
     # Unique por provider + tipo + id externo
