@@ -1,11 +1,105 @@
 import re
 import time
 import threading
+from datetime import date, timedelta
 from typing import Any, Optional, Tuple
 
 import httpx
+from fastapi import HTTPException
+
+from app.models import TmdbConfig
 
 TMDB_BASE = "https://api.themoviedb.org/3"
+MIN_VOTE_COUNT_FOR_AVERAGE_SORT = 50
+ALLOWED_SOURCES = {"tmdb"}
+ALLOWED_TRENDING_KINDS = {"all", "movie", "tv"}
+ALLOWED_LIST_KINDS = {"movie", "tv"}
+ALLOWED_TIME_WINDOWS = {"day", "week"}
+ALLOWED_SORT_BY = {
+    "movie": {
+        "popularity.desc",
+        "popularity.asc",
+        "vote_average.desc",
+        "vote_average.asc",
+        "vote_count.desc",
+        "vote_count.asc",
+        "release_date.desc",
+        "release_date.asc",
+        "primary_release_date.desc",
+        "primary_release_date.asc",
+        "title.asc",
+        "title.desc",
+        "original_title.asc",
+        "original_title.desc",
+    },
+    "tv": {
+        "popularity.desc",
+        "popularity.asc",
+        "vote_average.desc",
+        "vote_average.asc",
+        "vote_count.desc",
+        "vote_count.asc",
+        "first_air_date.desc",
+        "first_air_date.asc",
+        "name.asc",
+        "name.desc",
+        "original_name.asc",
+        "original_name.desc",
+    },
+}
+ALLOWED_LIST_KEYS = {
+    "movie": {"popular", "top_rated", "now_playing", "upcoming", "latest"},
+    "tv": {"popular", "top_rated", "airing_today", "on_the_air", "latest"},
+}
+ALLOWED_FILTERS = {
+    "movie": {
+        "with_genres",
+        "without_genres",
+        "with_cast",
+        "with_companies",
+        "with_keywords",
+        "with_original_language",
+        "with_runtime.gte",
+        "with_runtime.lte",
+        "with_watch_providers",
+        "with_watch_monetization_types",
+        "vote_average.gte",
+        "vote_average.lte",
+        "vote_count.gte",
+        "vote_count.lte",
+        "release_date.gte",
+        "release_date.lte",
+        "primary_release_date.gte",
+        "primary_release_date.lte",
+        "region",
+        "year",
+        "primary_release_year",
+        "include_adult",
+        "include_video",
+        "watch_region",
+    },
+    "tv": {
+        "with_genres",
+        "without_genres",
+        "with_networks",
+        "with_companies",
+        "with_keywords",
+        "with_original_language",
+        "with_runtime.gte",
+        "with_runtime.lte",
+        "with_watch_providers",
+        "with_watch_monetization_types",
+        "vote_average.gte",
+        "vote_average.lte",
+        "vote_count.gte",
+        "vote_count.lte",
+        "first_air_date.gte",
+        "first_air_date.lte",
+        "timezone",
+        "include_null_first_air_dates",
+        "watch_region",
+    },
+}
 
 class RateLimiter:
     def __init__(self, rps: int = 5):
@@ -88,6 +182,122 @@ def _pick_best_result(results: list[dict], wanted_title: str, wanted_year: Optio
 
     return best
 
+def _tmdb_error(status_code: int, detail: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail=detail)
+
+def _handle_tmdb_response_error(response: httpx.Response) -> None:
+    status = response.status_code
+    message = None
+    try:
+        payload = response.json()
+        message = payload.get("status_message") or payload.get("status") or payload.get("message")
+    except ValueError:
+        message = None
+
+    if status in {401, 403}:
+        raise _tmdb_error(status, "TMDB rechazó las credenciales. Verifica token o api_key.")
+    if status == 404:
+        raise _tmdb_error(status, "TMDB no encontró el recurso solicitado.")
+    if status == 429:
+        raise _tmdb_error(status, "TMDB alcanzó el límite de solicitudes. Intenta más tarde.")
+    if status == 400:
+        detail = f"TMDB rechazó la solicitud: {message or 'parámetros inválidos.'}"
+        raise _tmdb_error(status, detail)
+    if status >= 500:
+        raise _tmdb_error(502, "TMDB tuvo un error interno. Intenta más tarde.")
+
+    raise _tmdb_error(status, f"TMDB respondió con error: {message or 'solicitud inválida.'}")
+
+def _resolve_language_region(
+    language: Optional[str],
+    region: Optional[str],
+    config: Optional[TmdbConfig],
+) -> tuple[str, str]:
+    resolved_language = (language or (config.language if config else None) or "en-US").strip()
+    resolved_region = (region or (config.region if config else None) or "US").strip()
+    return resolved_language, resolved_region
+
+def _resolve_rps(rps: Optional[int], config: Optional[TmdbConfig]) -> int:
+    if rps is not None:
+        return max(1, int(rps))
+    if config and config.requests_per_second:
+        return max(1, int(config.requests_per_second))
+    return 5
+
+def _validate_source(source: str) -> None:
+    if source not in ALLOWED_SOURCES:
+        raise _tmdb_error(400, f"source inválido. Valores permitidos: {sorted(ALLOWED_SOURCES)}")
+
+def _validate_kind(kind: str, *, allowed: set[str]) -> None:
+    if kind not in allowed:
+        raise _tmdb_error(400, f"kind inválido. Valores permitidos: {sorted(allowed)}")
+
+def _validate_list_key(kind: str, list_key: str) -> None:
+    allowed = ALLOWED_LIST_KEYS.get(kind, set())
+    if list_key not in allowed:
+        raise _tmdb_error(400, f"list_key inválido para {kind}. Valores permitidos: {sorted(allowed)}")
+
+def _normalize_discover_filters(
+    kind: str,
+    filters: Optional[dict],
+    *,
+    sort_by: Optional[str],
+) -> dict[str, Any]:
+    clean_filters = dict(filters or {})
+    release_days_back = clean_filters.pop("release_days_back", None)
+
+    allowed_filters = ALLOWED_FILTERS.get(kind, set())
+    invalid_filters = [key for key in clean_filters.keys() if key not in allowed_filters]
+    if invalid_filters:
+        raise _tmdb_error(
+            400,
+            f"Filtros no permitidos para {kind}: {sorted(invalid_filters)}. Permitidos: {sorted(allowed_filters)}",
+        )
+
+    if sort_by == "vote_average.desc":
+        vote_count = clean_filters.get("vote_count.gte")
+        if vote_count is None:
+            raise _tmdb_error(
+                400,
+                f"sort_by=vote_average.desc requiere vote_count.gte >= {MIN_VOTE_COUNT_FOR_AVERAGE_SORT}.",
+            )
+        try:
+            vote_count_value = int(vote_count)
+        except (TypeError, ValueError):
+            raise _tmdb_error(400, "vote_count.gte debe ser un entero.") from None
+        if vote_count_value < MIN_VOTE_COUNT_FOR_AVERAGE_SORT:
+            raise _tmdb_error(
+                400,
+                f"sort_by=vote_average.desc requiere vote_count.gte >= {MIN_VOTE_COUNT_FOR_AVERAGE_SORT}.",
+            )
+
+    if release_days_back is not None:
+        try:
+            release_days_back = int(release_days_back)
+        except (TypeError, ValueError):
+            raise _tmdb_error(400, "release_days_back debe ser un entero >= 0.") from None
+        if release_days_back < 0:
+            raise _tmdb_error(400, "release_days_back debe ser un entero >= 0.")
+        date_key = "release_date" if kind == "movie" else "first_air_date"
+        gte_key = f"{date_key}.gte"
+        lte_key = f"{date_key}.lte"
+        if gte_key in clean_filters or lte_key in clean_filters:
+            raise _tmdb_error(400, "No combines release_days_back con filtros gte/lte manuales.")
+
+        today = date.today()
+        start_date = today - timedelta(days=release_days_back)
+        clean_filters[gte_key] = start_date.isoformat()
+        clean_filters[lte_key] = today.isoformat()
+
+    return clean_filters
+
+def _validate_sort_by(kind: str, sort_by: Optional[str]) -> None:
+    if not sort_by:
+        return
+    allowed = ALLOWED_SORT_BY.get(kind, set())
+    if sort_by not in allowed:
+        raise _tmdb_error(400, f"sort_by inválido para {kind}. Valores permitidos: {sorted(allowed)}")
+
 def tmdb_get_json(
     client: httpx.Client,
     limiter: RateLimiter,
@@ -112,7 +322,10 @@ def tmdb_get_json(
     backoff = 1.0
     for attempt in range(max_retries):
         limiter.wait()
-        r = client.get(url, params=params, headers=headers)
+        try:
+            r = client.get(url, params=params, headers=headers)
+        except httpx.RequestError as exc:
+            raise _tmdb_error(502, "No se pudo conectar con TMDB.") from exc
 
         if r.status_code == 429:
             # Rate limiting: respetar 429, TMDB pide ser “respectful”. :contentReference[oaicite:3]{index=3}
@@ -122,10 +335,12 @@ def tmdb_get_json(
             backoff = min(30.0, backoff * 2)
             continue
 
-        r.raise_for_status()
+        if r.is_error:
+            _handle_tmdb_response_error(r)
+
         return r.json()
 
-    raise RuntimeError("TMDB: too many 429 retries")
+    raise _tmdb_error(429, "TMDB alcanzó el límite de solicitudes. Intenta más tarde.")
 
 def find_and_fetch_movie(
     title: str,
@@ -186,3 +401,111 @@ def find_and_fetch_tv(
             params={"language": language, "append_to_response": "credits,videos"},
         )
         return best, details
+
+def fetch_trending(
+    kind: str,
+    time_window: str = "day",
+    *,
+    token: Optional[str],
+    api_key: Optional[str],
+    language: Optional[str] = None,
+    region: Optional[str] = None,
+    page: int = 1,
+    rps: Optional[int] = None,
+    config: Optional[TmdbConfig] = None,
+) -> dict[str, Any]:
+    _validate_kind(kind, allowed=ALLOWED_TRENDING_KINDS)
+    if time_window not in ALLOWED_TIME_WINDOWS:
+        raise _tmdb_error(400, f"time_window inválido. Valores permitidos: {sorted(ALLOWED_TIME_WINDOWS)}")
+
+    resolved_language, resolved_region = _resolve_language_region(language, region, config)
+    limiter = RateLimiter(rps=_resolve_rps(rps, config))
+    params = {
+        "language": resolved_language,
+        "region": resolved_region,
+        "page": max(1, int(page or 1)),
+    }
+    with httpx.Client(timeout=20) as client:
+        return tmdb_get_json(
+            client,
+            limiter,
+            f"/trending/{kind}/{time_window}",
+            token=token,
+            api_key=api_key,
+            params=params,
+        )
+
+def fetch_tmdb_list(
+    kind: str,
+    list_key: str,
+    *,
+    token: Optional[str],
+    api_key: Optional[str],
+    source: str = "tmdb",
+    language: Optional[str] = None,
+    region: Optional[str] = None,
+    page: int = 1,
+    rps: Optional[int] = None,
+    config: Optional[TmdbConfig] = None,
+) -> dict[str, Any]:
+    _validate_source(source)
+    _validate_kind(kind, allowed=ALLOWED_LIST_KINDS)
+    _validate_list_key(kind, list_key)
+
+    resolved_language, resolved_region = _resolve_language_region(language, region, config)
+    limiter = RateLimiter(rps=_resolve_rps(rps, config))
+    params = {
+        "language": resolved_language,
+        "region": resolved_region,
+        "page": max(1, int(page or 1)),
+    }
+    with httpx.Client(timeout=20) as client:
+        return tmdb_get_json(
+            client,
+            limiter,
+            f"/{kind}/{list_key}",
+            token=token,
+            api_key=api_key,
+            params=params,
+        )
+
+def fetch_discover(
+    kind: str,
+    filters: Optional[dict],
+    *,
+    sort_by: Optional[str] = None,
+    token: Optional[str],
+    api_key: Optional[str],
+    source: str = "tmdb",
+    language: Optional[str] = None,
+    region: Optional[str] = None,
+    page: int = 1,
+    rps: Optional[int] = None,
+    config: Optional[TmdbConfig] = None,
+) -> dict[str, Any]:
+    _validate_source(source)
+    _validate_kind(kind, allowed=ALLOWED_LIST_KINDS)
+    _validate_sort_by(kind, sort_by)
+
+    normalized_filters = _normalize_discover_filters(kind, filters, sort_by=sort_by)
+    resolved_language, resolved_region = _resolve_language_region(language, region, config)
+    limiter = RateLimiter(rps=_resolve_rps(rps, config))
+
+    params = {
+        "language": resolved_language,
+        "region": resolved_region,
+        "page": max(1, int(page or 1)),
+        **normalized_filters,
+    }
+    if sort_by:
+        params["sort_by"] = sort_by
+
+    with httpx.Client(timeout=20) as client:
+        return tmdb_get_json(
+            client,
+            limiter,
+            f"/discover/{kind}",
+            token=token,
+            api_key=api_key,
+            params=params,
+        )
