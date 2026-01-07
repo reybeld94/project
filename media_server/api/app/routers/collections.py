@@ -486,9 +486,9 @@ def delete_collection(collection_id_or_slug: str, db: Session = Depends(get_db))
 @router.get("/{collection_id_or_slug}/items", response_model=CollectionCacheOut)
 def collection_items(
     collection_id_or_slug: str,
+    background_tasks: BackgroundTasks,
     page: int = 1,
     stale_while_revalidate: bool = False,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     collection = _get_collection_by_identifier(db, collection_id_or_slug)
