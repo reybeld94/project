@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy import or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -328,12 +328,28 @@ def list_collections(
 @router.post("", response_model=CollectionOut)
 def create_collection(payload: CollectionCreate, db: Session = Depends(get_db)):
     filters = _normalize_filters(payload.filters)
+    name = payload.name.strip()
+    slug = payload.slug.strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Collection name is required")
+    if not slug:
+        raise HTTPException(status_code=400, detail="Collection slug is required")
+    if payload.source_type not in ALLOWED_COLLECTION_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_type inválido. Valores permitidos: {sorted(ALLOWED_COLLECTION_SOURCES)}",
+        )
+    if payload.source_type == "collection" and not payload.source_id:
+        raise HTTPException(status_code=400, detail="collection requiere source_id")
+
+    source_id = payload.source_id if payload.source_type == "collection" else None
 
     collection = TmdbCollection(
-        name=payload.name.strip(),
-        slug=payload.slug.strip(),
+        name=name,
+        slug=slug,
         source_type=payload.source_type,
-        source_id=payload.source_id,
+        source_id=source_id,
         filters=filters,
         cache_ttl_seconds=payload.cache_ttl_seconds,
         enabled=payload.enabled,
@@ -348,6 +364,9 @@ def create_collection(payload: CollectionCreate, db: Session = Depends(get_db)):
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Collection slug already exists") from exc
+    except DataError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid collection data") from exc
 
     db.refresh(collection)
     return collection
@@ -440,16 +459,33 @@ def update_collection(
     filters = payload.filters
 
     if "name" in data:
-        collection.name = (data["name"] or "").strip() or collection.name
+        name = (data["name"] or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Collection name is required")
+        collection.name = name
 
     if "slug" in data:
-        collection.slug = (data["slug"] or "").strip() or collection.slug
+        slug = (data["slug"] or "").strip()
+        if not slug:
+            raise HTTPException(status_code=400, detail="Collection slug is required")
+        collection.slug = slug
 
     if "source_type" in data:
-        collection.source_type = data["source_type"]
+        source_type = data["source_type"]
+        if source_type not in ALLOWED_COLLECTION_SOURCES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"source_type inválido. Valores permitidos: {sorted(ALLOWED_COLLECTION_SOURCES)}",
+            )
+        collection.source_type = source_type
 
     if "source_id" in data:
         collection.source_id = data["source_id"]
+
+    if "source_type" in data and collection.source_type != "collection":
+        collection.source_id = None
+    if collection.source_type == "collection" and not collection.source_id:
+        raise HTTPException(status_code=400, detail="collection requiere source_id")
 
     if filters is not None:
         collection.filters = _normalize_filters(filters)
@@ -470,6 +506,9 @@ def update_collection(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Collection slug already exists") from exc
+    except DataError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid collection data") from exc
 
     db.refresh(collection)
     return collection
