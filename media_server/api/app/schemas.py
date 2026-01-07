@@ -1,6 +1,5 @@
 from pydantic import BaseModel, HttpUrl, Field
 from uuid import UUID
-from pydantic import BaseModel
 from typing import Optional
 
 
@@ -147,3 +146,74 @@ class TmdbActivityItemOut(BaseModel):
 class TmdbActivityOut(BaseModel):
     server_time: str
     items: list[TmdbActivityItemOut]
+
+
+class CollectionFilters(BaseModel):
+    kind: str | None = None
+    time_window: str | None = None
+    list_key: str | None = None
+    sort_by: str | None = None
+    filters: dict | None = None
+    language: str | None = None
+    region: str | None = None
+
+
+class CollectionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    slug: str = Field(min_length=1, max_length=255)
+    source_type: str = Field(default="trending")
+    source_id: int | None = None
+    filters: CollectionFilters | None = None
+    cache_ttl_seconds: int | None = None
+    enabled: bool = True
+    order_index: int = 0
+
+
+class CollectionUpdate(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    source_type: str | None = None
+    source_id: int | None = None
+    filters: CollectionFilters | None = None
+    cache_ttl_seconds: int | None = None
+    enabled: bool | None = None
+    order_index: int | None = None
+
+
+class CollectionOut(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    source_type: str
+    source_id: int | None = None
+    filters: dict | None = None
+    cache_ttl_seconds: int | None = None
+    enabled: bool
+    order_index: int
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class CollectionCacheOut(BaseModel):
+    collection_id: UUID
+    page: int
+    payload: dict
+    expires_at: str | None = None
+    cached: bool
+
+
+class CollectionPreviewIn(BaseModel):
+    source_type: str | None = None
+    source_id: int | None = None
+    filters: CollectionFilters | None = None
+
+
+class CollectionPreviewOut(BaseModel):
+    source_type: str
+    source_id: int | None = None
+    filters: dict | None = None
+    page: int
+    payload: dict

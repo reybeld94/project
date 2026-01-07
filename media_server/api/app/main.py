@@ -15,6 +15,7 @@ from .routers.epg import sync_epg_for_source_id
 from .routers.vod import router as vod_router
 from .routers.series import router as series_router
 from .routers.tmdb import router as tmdb_router
+from .routers.collections import router as collections_router
 from .routers.tmdb import (
     sync_movies as tmdb_sync_movies,
     sync_series as tmdb_sync_series,
@@ -181,3 +182,4 @@ app.include_router(epg_router)
 app.include_router(vod_router)
 app.include_router(series_router)
 app.include_router(tmdb_router)
+app.include_router(collections_router)
