@@ -73,9 +73,9 @@ fun SideMenuDrawer(
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.92f),
-                                    Color.Black.copy(alpha = 0.70f),
-                                    Color.Transparent
+                                    Color.Black.copy(alpha = 0.96f),
+                                    Color.Black.copy(alpha = 0.82f),
+                                    Color.Black.copy(alpha = 0.12f)
                                 )
                             )
                         )
@@ -87,7 +87,7 @@ fun SideMenuDrawer(
                     ) {
                         Text(
                             text = "ELLEN TV",
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),
                             color = Color.White.copy(alpha = 0.92f)
@@ -174,7 +174,7 @@ private fun DrawerItem(
             Text(
                 text = text,
                 color = Color.White.copy(alpha = 0.95f),
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                 )
             )
