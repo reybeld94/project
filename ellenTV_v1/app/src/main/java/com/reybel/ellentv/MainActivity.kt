@@ -85,6 +85,10 @@ private const val FULL_EPG_HOURS = 8
 private const val FULL_EPG_CHANNELS = 80
 private val DEBUG_LOGS_ENABLED = BuildConfig.DEBUG
 
+private enum class EpgFocusArea {
+    CHANNELS,
+    PROGRAMS
+}
 
 @OptIn(UnstableApi::class)
 class MainActivity : ComponentActivity() {
@@ -175,6 +179,8 @@ fun TvHomeScreen(
 
     // 🔧 NUEVO: Track si estamos en el borde izquierdo del EPG (columna de canales)
     var epgOnChannelColumn by remember { mutableStateOf(false) }
+    var epgSuppressDrawerOpen by remember { mutableStateOf(false) }
+    var epgLastFocusArea by remember { mutableStateOf(EpgFocusArea.PROGRAMS) }
 
     var channels by remember { mutableStateOf(emptyList<LiveItem>()) }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -649,6 +655,10 @@ fun TvHomeScreen(
                     }
 
                     if (ne.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && canOpen) {
+                        if (section == AppSection.LIVE && epgSuppressDrawerOpen) {
+                            epgSuppressDrawerOpen = false
+                            return@onPreviewKeyEvent false
+                        }
                         drawerOpen = true
                         true
                     } else {
@@ -731,6 +741,15 @@ fun TvHomeScreen(
                         },
                         // 🔧 NUEVO: Callback para saber si estamos en la columna de canales
                         onChannelColumnFocusChanged = { isOnChannelColumn ->
+                            if (isOnChannelColumn) {
+                                if (epgLastFocusArea == EpgFocusArea.PROGRAMS) {
+                                    epgSuppressDrawerOpen = true
+                                }
+                                epgLastFocusArea = EpgFocusArea.CHANNELS
+                            } else {
+                                epgLastFocusArea = EpgFocusArea.PROGRAMS
+                                epgSuppressDrawerOpen = false
+                            }
                             epgOnChannelColumn = isOnChannelColumn
                         },
                         modifier = Modifier
