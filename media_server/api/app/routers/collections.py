@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import uuid
 from datetime import datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.db import SessionLocal
 from app.deps import get_db
 from app.models import TmdbCollection, TmdbCollectionCache
 from app.routers.tmdb import get_or_create_cfg
@@ -28,6 +31,147 @@ router = APIRouter(prefix="/collections", tags=["collections"])
 
 DEFAULT_CACHE_TTL_SECONDS = 3600
 ALLOWED_COLLECTION_SOURCES = {"trending", "list", "discover", "collection"}
+log = logging.getLogger(__name__)
+
+_cache_metrics = {"hits": 0, "misses": 0, "expired": 0, "tmdb_errors": 0}
+_metrics_lock = threading.Lock()
+
+
+def _increment_metric(metric: str) -> None:
+    with _metrics_lock:
+        _cache_metrics[metric] = _cache_metrics.get(metric, 0) + 1
+        snapshot = dict(_cache_metrics)
+    log.info(
+        "collections cache metrics: hits=%s misses=%s expired=%s tmdb_errors=%s",
+        snapshot.get("hits", 0),
+        snapshot.get("misses", 0),
+        snapshot.get("expired", 0),
+        snapshot.get("tmdb_errors", 0),
+    )
+
+
+def _resolve_cache_ttl(collection: TmdbCollection) -> int:
+    ttl = collection.cache_ttl_seconds
+    if not ttl or ttl <= 0:
+        ttl = DEFAULT_CACHE_TTL_SECONDS
+    return int(ttl)
+
+
+def _upsert_cache_entry(
+    db: Session,
+    *,
+    collection: TmdbCollection,
+    page: int,
+    payload: dict,
+    now: datetime,
+) -> TmdbCollectionCache:
+    expires_at = now + timedelta(seconds=_resolve_cache_ttl(collection))
+    cache = db.execute(
+        select(TmdbCollectionCache)
+        .where(TmdbCollectionCache.collection_id == collection.id)
+        .where(TmdbCollectionCache.page == page)
+    ).scalar_one_or_none()
+    if cache:
+        cache.payload = payload
+        cache.expires_at = expires_at
+        cache.updated_at = now
+    else:
+        cache = TmdbCollectionCache(
+            collection_id=collection.id,
+            page=page,
+            payload=payload,
+            expires_at=expires_at,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(cache)
+    return cache
+
+
+def _refresh_cache_entry(collection_id: uuid.UUID, page: int) -> None:
+    db = SessionLocal()
+    try:
+        collection = db.get(TmdbCollection, collection_id)
+        if not collection or not collection.enabled:
+            return
+        payload = _resolve_tmdb_payload(
+            source_type=collection.source_type,
+            source_id=collection.source_id,
+            filters=collection.filters,
+            page=page,
+            db=db,
+        )
+        now = datetime.utcnow()
+        _upsert_cache_entry(db, collection=collection, page=page, payload=payload, now=now)
+        db.commit()
+    except HTTPException as exc:
+        _increment_metric("tmdb_errors")
+        log.warning(
+            "TMDB refresh failed for collection_id=%s page=%s: %s",
+            collection_id,
+            page,
+            exc.detail,
+        )
+        db.rollback()
+    except Exception:
+        _increment_metric("tmdb_errors")
+        log.exception(
+            "TMDB refresh failed for collection_id=%s page=%s due to unexpected error",
+            collection_id,
+            page,
+        )
+        db.rollback()
+    finally:
+        db.close()
+
+
+def refresh_expired_collection_caches() -> dict:
+    db = SessionLocal()
+    refreshed = 0
+    failed = 0
+    now = datetime.utcnow()
+    try:
+        caches = db.execute(
+            select(TmdbCollectionCache)
+            .join(TmdbCollection, TmdbCollection.id == TmdbCollectionCache.collection_id)
+            .where(TmdbCollection.enabled == True)
+            .where(TmdbCollectionCache.expires_at <= now)
+        ).scalars().all()
+        for cache in caches:
+            try:
+                payload = _resolve_tmdb_payload(
+                    source_type=cache.collection.source_type,
+                    source_id=cache.collection.source_id,
+                    filters=cache.collection.filters,
+                    page=cache.page,
+                    db=db,
+                )
+                _upsert_cache_entry(
+                    db,
+                    collection=cache.collection,
+                    page=cache.page,
+                    payload=payload,
+                    now=datetime.utcnow(),
+                )
+                refreshed += 1
+            except HTTPException as exc:
+                failed += 1
+                _increment_metric("tmdb_errors")
+                log.warning(
+                    "TMDB refresh job failed for collection_id=%s page=%s: %s",
+                    cache.collection_id,
+                    cache.page,
+                    exc.detail,
+                )
+        db.commit()
+    except Exception:
+        failed += 1
+        _increment_metric("tmdb_errors")
+        log.exception("TMDB refresh job failed due to unexpected error")
+        db.rollback()
+    finally:
+        db.close()
+    return {"refreshed": refreshed, "failed": failed}
 
 
 def _normalize_filters(filters: CollectionFilters | None) -> dict | None:
@@ -335,6 +479,8 @@ def delete_collection(collection_id_or_slug: str, db: Session = Depends(get_db))
 def collection_items(
     collection_id_or_slug: str,
     page: int = 1,
+    stale_while_revalidate: bool = False,
+    background_tasks: BackgroundTasks | None = None,
     db: Session = Depends(get_db),
 ):
     collection = _get_collection_by_identifier(db, collection_id_or_slug)
@@ -351,42 +497,64 @@ def collection_items(
     ).scalar_one_or_none()
 
     if cache and cache.expires_at > now:
+        _increment_metric("hits")
         return {
             "collection_id": collection.id,
             "page": cache.page,
             "payload": cache.payload,
             "expires_at": cache.expires_at,
             "cached": True,
+            "stale": False,
         }
 
-    payload = _resolve_tmdb_payload(
-        source_type=collection.source_type,
-        source_id=collection.source_id,
-        filters=collection.filters,
-        page=page,
-        db=db,
-    )
-
-    ttl = collection.cache_ttl_seconds
-    if not ttl or ttl <= 0:
-        ttl = DEFAULT_CACHE_TTL_SECONDS
-
-    expires_at = now + timedelta(seconds=int(ttl))
-
     if cache:
-        cache.payload = payload
-        cache.expires_at = expires_at
-        cache.updated_at = now
+        _increment_metric("expired")
+        if stale_while_revalidate:
+            if background_tasks:
+                background_tasks.add_task(_refresh_cache_entry, collection.id, page)
+            return {
+                "collection_id": collection.id,
+                "page": cache.page,
+                "payload": cache.payload,
+                "expires_at": cache.expires_at,
+                "cached": True,
+                "stale": True,
+            }
     else:
-        cache = TmdbCollectionCache(
-            collection_id=collection.id,
+        _increment_metric("misses")
+
+    try:
+        payload = _resolve_tmdb_payload(
+            source_type=collection.source_type,
+            source_id=collection.source_id,
+            filters=collection.filters,
             page=page,
-            payload=payload,
-            expires_at=expires_at,
-            created_at=now,
-            updated_at=now,
+            db=db,
         )
-        db.add(cache)
+    except HTTPException as exc:
+        _increment_metric("tmdb_errors")
+        log.warning(
+            "TMDB fetch failed for collection_id=%s page=%s: %s",
+            collection.id,
+            page,
+            exc.detail,
+        )
+        return {
+            "collection_id": collection.id,
+            "page": page,
+            "payload": {},
+            "expires_at": None,
+            "cached": False,
+            "stale": False,
+        }
+
+    cache = _upsert_cache_entry(
+        db,
+        collection=collection,
+        page=page,
+        payload=payload,
+        now=now,
+    )
 
     db.commit()
     db.refresh(cache)
@@ -397,4 +565,5 @@ def collection_items(
         "payload": cache.payload,
         "expires_at": cache.expires_at,
         "cached": False,
+        "stale": False,
     }

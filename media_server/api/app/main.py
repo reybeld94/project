@@ -16,6 +16,7 @@ from .routers.vod import router as vod_router
 from .routers.series import router as series_router
 from .routers.tmdb import router as tmdb_router
 from .routers.collections import router as collections_router
+from .routers.collections import refresh_expired_collection_caches
 from .routers.tmdb import (
     sync_movies as tmdb_sync_movies,
     sync_series as tmdb_sync_series,
@@ -34,6 +35,8 @@ TMDB_AUTO_SYNC_BATCH_MOVIES = int(os.getenv("TMDB_AUTO_SYNC_BATCH_MOVIES", "5"))
 TMDB_AUTO_SYNC_BATCH_SERIES = int(os.getenv("TMDB_AUTO_SYNC_BATCH_SERIES", "5"))
 TMDB_AUTO_SYNC_COOLDOWN_MINUTES = int(os.getenv("TMDB_AUTO_SYNC_COOLDOWN_MINUTES", "60"))
 TMDB_AUTO_SYNC_IDLE_MINUTES = int(os.getenv("TMDB_AUTO_SYNC_IDLE_MINUTES", "30"))
+COLLECTIONS_AUTO_REFRESH = os.getenv("COLLECTIONS_AUTO_REFRESH", "1").strip().lower() not in {"0", "false", "no", "off"}
+COLLECTIONS_AUTO_REFRESH_MINUTES = int(os.getenv("COLLECTIONS_AUTO_REFRESH_MINUTES", "10"))
 
 
 app = FastAPI(title="Mini Media Server (Local)")
@@ -170,6 +173,32 @@ async def _start_tmdb_auto_sync():
             except Exception as e:
                 log.exception("TMDB auto-sync loop error: %s", e)
                 await asyncio.sleep(interval_s)
+
+    asyncio.create_task(loop())
+
+
+@app.on_event("startup")
+async def _start_collections_auto_refresh():
+    if not COLLECTIONS_AUTO_REFRESH:
+        log.info("Collections auto-refresh: disabled (COLLECTIONS_AUTO_REFRESH=0)")
+        return
+
+    interval_s = max(60, COLLECTIONS_AUTO_REFRESH_MINUTES * 60)
+    log.info("Collections auto-refresh: enabled (every %s min)", COLLECTIONS_AUTO_REFRESH_MINUTES)
+
+    async def loop():
+        await asyncio.sleep(3)
+        while True:
+            try:
+                result = await asyncio.to_thread(refresh_expired_collection_caches)
+                log.info(
+                    "Collections auto-refresh complete: refreshed=%s failed=%s",
+                    result.get("refreshed", 0),
+                    result.get("failed", 0),
+                )
+            except Exception as e:
+                log.exception("Collections auto-refresh loop error: %s", e)
+            await asyncio.sleep(interval_s)
 
     asyncio.create_task(loop())
 

@@ -203,6 +203,7 @@ class CollectionCacheOut(BaseModel):
     payload: dict
     expires_at: str | None = None
     cached: bool
+    stale: bool = False
 
 
 class CollectionPreviewIn(BaseModel):
