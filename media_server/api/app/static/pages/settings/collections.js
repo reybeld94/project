@@ -617,6 +617,7 @@ export function CollectionsTab(appState) {
       vote_count_gte: voteCountValue ?? "",
       genre_ids: parseGenres(genreValue),
     });
+    renderList();
   }
 
   function duplicateDraft() {
@@ -628,6 +629,7 @@ export function CollectionsTab(appState) {
       title: `${draft.title || "Collection"} (Copy)`,
       slug: "",
     });
+    renderList();
   }
 
   function cancelDraft() {
