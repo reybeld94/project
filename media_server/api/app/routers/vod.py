@@ -15,8 +15,9 @@ MAX_LIMIT = 5000
 
 
 def _get_vod_by_identifier(db: Session, vod_id: str) -> VodStream | None:
-    if vod_id.startswith("tmdb:"):
-        tmdb_value = vod_id.split(":", 1)[1].strip()
+    normalized_id = vod_id.strip()
+    if normalized_id.lower().startswith("tmdb:"):
+        tmdb_value = normalized_id.split(":", 1)[1].strip()
         if not tmdb_value.isdigit():
             return None
         return db.execute(
@@ -24,7 +25,7 @@ def _get_vod_by_identifier(db: Session, vod_id: str) -> VodStream | None:
         ).scalar_one_or_none()
 
     try:
-        vod_uuid = uuid.UUID(vod_id)
+        vod_uuid = uuid.UUID(normalized_id)
     except ValueError:
         return None
 
