@@ -181,6 +181,25 @@ def _normalize_filters(filters: CollectionFilters | None) -> dict | None:
     return data or None
 
 
+def _coerce_filters(filters: dict | str | None) -> dict:
+    if not filters:
+        return {}
+    if isinstance(filters, dict):
+        return dict(filters)
+    if isinstance(filters, str):
+        try:
+            parsed = json.loads(filters)
+        except json.JSONDecodeError:
+            log.warning("Invalid collection filters JSON string; ignoring filters.")
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        log.warning("Collection filters JSON parsed to non-dict type; ignoring filters.")
+        return {}
+    log.warning("Collection filters stored as unexpected type=%s; ignoring filters.", type(filters))
+    return {}
+
+
 def _get_collection_by_identifier(db: Session, identifier: str) -> TmdbCollection:
     collection = None
     try:
@@ -231,7 +250,7 @@ def _resolve_tmdb_payload(
 
     cfg, token, api_key = _get_tmdb_credentials(db)
 
-    normalized_filters = dict(filters or {})
+    normalized_filters = _coerce_filters(filters)
     language = normalized_filters.pop("language", None)
     region = normalized_filters.pop("region", None)
     kind = normalized_filters.get("kind")
