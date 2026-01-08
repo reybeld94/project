@@ -1,9 +1,13 @@
 package com.reybel.ellentv.data.repo
 
 import android.util.Log
-import com.reybel.ellentv.data.api.*
 import com.reybel.ellentv.data.api.ApiClient
 import com.reybel.ellentv.data.api.ApiService
+import com.reybel.ellentv.data.api.CollectionItemsResponse
+import com.reybel.ellentv.data.api.CollectionOut
+import com.reybel.ellentv.data.api.ProviderCategoryOut
+import com.reybel.ellentv.data.api.ProviderOut
+import com.reybel.ellentv.data.api.VodListResponse
 
 class VodRepo {
     private val api = ApiClient.retrofit.create(ApiService::class.java)
@@ -41,6 +45,30 @@ class VodRepo {
             offset = offset,
             activeOnly = true,
             approved = true
+        )
+    }
+
+    suspend fun fetchCollections(
+        enabled: Boolean? = true,
+        limit: Int = 50,
+        offset: Int = 0
+    ): List<CollectionOut> {
+        return api.getCollections(
+            enabled = enabled,
+            limit = limit,
+            offset = offset
+        )
+    }
+
+    suspend fun fetchCollectionItems(
+        collectionIdOrSlug: String,
+        page: Int = 1,
+        staleWhileRevalidate: Boolean = true
+    ): CollectionItemsResponse {
+        return api.getCollectionItems(
+            collectionIdOrSlug = collectionIdOrSlug,
+            page = page,
+            staleWhileRevalidate = staleWhileRevalidate
         )
     }
 

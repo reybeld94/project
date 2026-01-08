@@ -79,4 +79,20 @@ interface ApiService {
         @Path("vod_id") vodId: String,
         @Query("format") format: String? = null
     ): PlayResponse
+
+    // ---------- COLLECTIONS ----------
+
+    @GET("collections")
+    suspend fun getCollections(
+        @Query("enabled") enabled: Boolean? = true,
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0
+    ): List<CollectionOut>
+
+    @GET("collections/{collection_id_or_slug}/items")
+    suspend fun getCollectionItems(
+        @Path("collection_id_or_slug") collectionIdOrSlug: String,
+        @Query("page") page: Int = 1,
+        @Query("stale_while_revalidate") staleWhileRevalidate: Boolean = true
+    ): CollectionItemsResponse
 }

@@ -42,6 +42,41 @@ data class PlayResponse(
     val url: String
 )
 
+data class CollectionOut(
+    val id: String,
+    val name: String,
+    val slug: String,
+    @Json(name = "source_type") val sourceType: String,
+    @Json(name = "source_id") val sourceId: Int? = null,
+    val enabled: Boolean = true,
+    @Json(name = "order_index") val orderIndex: Int = 0
+)
+
+data class CollectionItemsResponse(
+    @Json(name = "collection_id") val collectionId: String,
+    val page: Int,
+    val payload: Map<String, Any> = emptyMap(),
+    val cached: Boolean = false,
+    val stale: Boolean = false
+)
+
+data class TmdbPagedResponse(
+    val page: Int? = null,
+    @Json(name = "total_pages") val totalPages: Int? = null,
+    val results: List<TmdbItem> = emptyList()
+)
+
+data class TmdbItem(
+    val id: Int,
+    val title: String? = null,
+    val name: String? = null,
+    @Json(name = "poster_path") val posterPath: String? = null,
+    @Json(name = "backdrop_path") val backdropPath: String? = null
+) {
+    val displayTitle: String
+        get() = title ?: name ?: ""
+}
+
 // -------------------- EPG --------------------
 
 data class EpgGridResponse(
