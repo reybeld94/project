@@ -1,15 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_
+
 from app.deps import get_db
 from app.models import Provider, Category, VodStream
 from app.schemas import VodStreamUpdate
 from app.xtream_client import xtream_get
-from fastapi import Response
 
 router = APIRouter(prefix="/vod", tags=["vod"])
 
 MAX_LIMIT = 5000
+
+
+def _get_vod_by_identifier(db: Session, vod_id: str) -> VodStream | None:
+    if vod_id.startswith("tmdb:"):
+        tmdb_value = vod_id.split(":", 1)[1].strip()
+        if not tmdb_value.isdigit():
+            return None
+        return db.execute(
+            select(VodStream).where(VodStream.tmdb_id == int(tmdb_value))
+        ).scalar_one_or_none()
+
+    try:
+        vod_uuid = uuid.UUID(vod_id)
+    except ValueError:
+        return None
+
+    return db.get(VodStream, vod_uuid)
 
 @router.get("")
 
@@ -188,7 +207,7 @@ def vod_play_url(
 
     Dejamos que ExoPlayer siga el 302 él mismo para obtener un token fresco.
     """
-    v = db.get(VodStream, vod_id)
+    v = _get_vod_by_identifier(db, vod_id)
     if not v:
         raise HTTPException(status_code=404, detail="VOD not found")
 
@@ -220,7 +239,7 @@ def vod_info(
         vod_id: str,
         db: Session = Depends(get_db),
 ):
-    v = db.get(VodStream, vod_id)
+    v = _get_vod_by_identifier(db, vod_id)
     if not v:
         raise HTTPException(status_code=404, detail="VOD not found")
 
@@ -238,7 +257,7 @@ def update_vod(
         payload: VodStreamUpdate,
         db: Session = Depends(get_db),
 ):
-    v = db.get(VodStream, vod_id)
+    v = _get_vod_by_identifier(db, vod_id)
     if not v:
         raise HTTPException(status_code=404, detail="VOD not found")
 
@@ -291,7 +310,7 @@ def update_vod(
 
 @router.get("/{vod_id}")
 def vod_detail(vod_id: str, db: Session = Depends(get_db)):
-    v = db.get(VodStream, vod_id)
+    v = _get_vod_by_identifier(db, vod_id)
     if not v:
         raise HTTPException(status_code=404, detail="VOD not found")
 
