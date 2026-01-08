@@ -15,7 +15,6 @@ private const val DEFAULT_PAGE_LIMIT = 30
 data class MoviesCollectionUi(
     val providerId: String,
     val title: String,
-    val categoryExtId: Int? = null,
     val isLoading: Boolean = false,
     val items: List<VodItem> = emptyList(),
     val total: Int = 0,
@@ -57,7 +56,7 @@ class MoviesViewModel(
                 _ui.update { it.copy(isLoading = false, collections = collections) }
 
                 selected.forEach { provider ->
-                    loadProviderCollection(provider.id)
+                    loadFirstPage(provider.id)
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isLoading = false, error = e.message ?: "Error loading providers") }
@@ -65,29 +64,13 @@ class MoviesViewModel(
         }
     }
 
-    private fun loadProviderCollection(providerId: String) {
-        viewModelScope.launch {
-            updateCollection(providerId) { it.copy(isLoading = true, error = null, offset = 0) }
-            try {
-                val categories = repo.fetchVodCategories(providerId)
-                val firstCategory = categories.firstOrNull()
-                val categoryExtId = firstCategory?.extId
-                val title = firstCategory?.name ?: _ui.value.collections.firstOrNull { it.providerId == providerId }?.title.orEmpty()
-                updateCollection(providerId) { it.copy(title = title, categoryExtId = categoryExtId) }
-                loadFirstPage(providerId, categoryExtId)
-            } catch (e: Exception) {
-                updateCollection(providerId) { it.copy(isLoading = false, error = e.message ?: "Error loading collection") }
-            }
-        }
-    }
-
-    private fun loadFirstPage(providerId: String, categoryExtId: Int?) {
+    private fun loadFirstPage(providerId: String) {
         val limit = _ui.value.limit
 
         viewModelScope.launch {
             updateCollection(providerId) { it.copy(isLoading = true, error = null, offset = 0) }
             try {
-                val resp = repo.fetchVodPage(providerId, categoryExtId = categoryExtId, limit = limit, offset = 0)
+                val resp = repo.fetchVodPage(providerId, categoryExtId = null, limit = limit, offset = 0)
                 updateCollection(providerId) {
                     it.copy(
                         isLoading = false,
@@ -113,12 +96,7 @@ class MoviesViewModel(
         viewModelScope.launch {
             updateCollection(providerId) { it.copy(isLoading = true, error = null) }
             try {
-                val resp = repo.fetchVodPage(
-                    providerId,
-                    categoryExtId = collection.categoryExtId,
-                    limit = limit,
-                    offset = collection.offset
-                )
+                val resp = repo.fetchVodPage(providerId, categoryExtId = null, limit = limit, offset = collection.offset)
                 updateCollection(providerId) {
                     it.copy(
                         isLoading = false,
