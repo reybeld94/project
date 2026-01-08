@@ -82,7 +82,9 @@ data class TmdbItem(
     @Json(name = "poster_path") val posterPath: String? = null,
     @Json(name = "backdrop_path") val backdropPath: String? = null,
     @Json(name = "release_date") val releaseDate: String? = null,
-    @Json(name = "first_air_date") val firstAirDate: String? = null
+    @Json(name = "first_air_date") val firstAirDate: String? = null,
+    @Json(name = "vod_id") val vodId: String? = null,
+    @Json(name = "stream_url") val streamUrl: String? = null
 ) {
     val displayTitle: String
         get() = title ?: name ?: ""
@@ -166,7 +168,8 @@ data class VodItem(
     @Json(name = "genre_names") val genreNames: List<String>? = null,
     @Json(name = "release_date") val releaseDate: String? = null,
     @Json(name = "backdrop_path") val backdropPath: String? = null,
-    val backdrop: String? = null
+    val backdrop: String? = null,
+    @Json(name = "stream_url") val streamUrl: String? = null
 ) {
     val posterUrl: String? get() = customPosterUrl ?: poster ?: streamIcon
     val backdropUrl: String? get() = backdrop ?: backdropPath ?: posterUrl
