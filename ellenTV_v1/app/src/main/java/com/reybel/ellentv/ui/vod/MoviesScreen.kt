@@ -128,7 +128,7 @@ private fun MoviesCollectionSection(
                     MoviePosterCard(
                         item = item,
                         isLeftEdge = itemIndex == 0,
-                        onPlay = if (collection.isPlayable) onPlay else {},
+                        onPlay = if (collection.isPlayable) onPlay else { _ -> },
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
                         onFocused = { focusedIndex = itemIndex }
                     )
