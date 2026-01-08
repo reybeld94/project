@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         val homeVm: HomeViewModel by viewModels()
-        val vodVm: com.reybel.ellentv.ui.vod.VodViewModel by viewModels()
+        val moviesVm: com.reybel.ellentv.ui.vod.MoviesViewModel by viewModels()
         val seriesVm: com.reybel.ellentv.ui.series.SeriesViewModel by viewModels()
 
         // Fullscreen (Fire TV feel)
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(typography = AppTypography) {
-                TvHomeScreen(playerManager, homeVm, vodVm, seriesVm)
+                TvHomeScreen(playerManager, homeVm, moviesVm, seriesVm)
             }
         }
     }
@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
 fun TvHomeScreen(
     playerManager: com.reybel.ellentv.ui.player.PlayerManager,
     vm: HomeViewModel,
-    vodVm: com.reybel.ellentv.ui.vod.VodViewModel,
+    moviesVm: com.reybel.ellentv.ui.vod.MoviesViewModel,
     seriesVm: com.reybel.ellentv.ui.series.SeriesViewModel
 ) {
     val ui by vm.ui.collectAsState()
@@ -170,7 +170,7 @@ fun TvHomeScreen(
     var healthIssue by remember { mutableStateOf<String?>(null) }
     var bufferLevel by remember { mutableStateOf("Normal") }
 
-    val vodUi by vodVm.ui.collectAsState()
+    val moviesUi by moviesVm.ui.collectAsState()
     val seriesUi by seriesVm.ui.collectAsState()
 
     var vodLeftEdgeFocused by remember { mutableStateOf(false) }
@@ -382,7 +382,7 @@ fun TvHomeScreen(
     LaunchedEffect(section, providerId) {
         val pid = providerId ?: return@LaunchedEffect
         when (section) {
-            AppSection.MOVIES -> vodVm.open(pid)
+            AppSection.MOVIES -> moviesVm.open()
             AppSection.SERIES -> seriesVm.open(pid)
             else -> {}
         }
@@ -760,14 +760,13 @@ fun TvHomeScreen(
             }
 
             AppSection.MOVIES -> {
-                com.reybel.ellentv.ui.vod.VodScreen(
-                    ui = vodUi,
-                    onSelectCategory = { vodVm.selectCategory(it) },
-                    onRequestMore = { lastIdx -> vodVm.loadMoreIfNeeded(lastIdx) },
+                com.reybel.ellentv.ui.vod.MoviesScreen(
+                    ui = moviesUi,
+                    onRequestMore = { providerId, lastIdx -> moviesVm.loadMoreIfNeeded(providerId, lastIdx) },
                     onPlay = { vodId ->
                         scope.launch {
                             try {
-                                val url = vodVm.getPlayUrl(vodId)
+                                val url = moviesVm.getPlayUrl(vodId)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
                                 isFullscreen = true
