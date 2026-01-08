@@ -164,9 +164,12 @@ data class VodItem(
     @Json(name = "container_extension") val containerExtension: String? = null,
     val overview: String? = null,
     @Json(name = "genre_names") val genreNames: List<String>? = null,
-    @Json(name = "release_date") val releaseDate: String? = null
+    @Json(name = "release_date") val releaseDate: String? = null,
+    @Json(name = "backdrop_path") val backdropPath: String? = null,
+    val backdrop: String? = null
 ) {
     val posterUrl: String? get() = customPosterUrl ?: poster ?: streamIcon
+    val backdropUrl: String? get() = backdrop ?: backdropPath ?: posterUrl
     val displayTitle: String
         get() = when {
             tmdbStatus == "synced" && !tmdbTitle.isNullOrBlank() -> tmdbTitle
