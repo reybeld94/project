@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.deps import get_db
-from app.models import TmdbCollection, TmdbCollectionCache
+from app.models import Provider, TmdbCollection, TmdbCollectionCache, VodStream
 from app.routers.tmdb import get_or_create_cfg
 from app.schemas import (
     CollectionCacheOut,
@@ -232,6 +232,66 @@ def _get_tmdb_credentials(db: Session):
         raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
 
     return cfg, token, api_key
+
+
+def _augment_payload_with_catalog(payload: dict, db: Session) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+
+    items_key = None
+    if isinstance(payload.get("results"), list):
+        items_key = "results"
+    elif isinstance(payload.get("parts"), list):
+        items_key = "parts"
+
+    if not items_key:
+        return payload
+
+    items = payload.get(items_key) or []
+    tmdb_ids = [
+        item.get("id")
+        for item in items
+        if isinstance(item, dict) and isinstance(item.get("id"), int)
+    ]
+    if not tmdb_ids:
+        return payload
+
+    rows = db.execute(
+        select(VodStream, Provider)
+        .join(Provider, Provider.id == VodStream.provider_id)
+        .where(VodStream.tmdb_id.in_(tmdb_ids))
+        .where(VodStream.approved == True)
+        .where(VodStream.is_active == True)
+    ).all()
+
+    catalog_by_tmdb = {
+        vod.tmdb_id: (vod, provider)
+        for vod, provider in rows
+        if vod.tmdb_id is not None
+    }
+
+    filtered_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        tmdb_id = item.get("id")
+        entry = catalog_by_tmdb.get(tmdb_id)
+        if not entry:
+            continue
+        vod, provider = entry
+        ext = (vod.container_extension or "mp4").lower().strip()
+        stream_url = (
+            f"{provider.base_url.rstrip('/')}/movie/"
+            f"{provider.username}/{provider.password}/{vod.provider_stream_id}.{ext}"
+        )
+        enriched = dict(item)
+        enriched["vod_id"] = str(vod.id)
+        enriched["stream_url"] = stream_url
+        filtered_items.append(enriched)
+
+    filtered_payload = dict(payload)
+    filtered_payload[items_key] = filtered_items
+    return filtered_payload
 
 
 def _resolve_tmdb_payload(
@@ -567,7 +627,7 @@ def collection_items(
         return {
             "collection_id": collection.id,
             "page": cache.page,
-            "payload": cache.payload,
+            "payload": _augment_payload_with_catalog(cache.payload, db),
             "expires_at": cache.expires_at,
             "cached": True,
             "stale": False,
@@ -581,7 +641,7 @@ def collection_items(
             return {
                 "collection_id": collection.id,
                 "page": cache.page,
-                "payload": cache.payload,
+                "payload": _augment_payload_with_catalog(cache.payload, db),
                 "expires_at": cache.expires_at,
                 "cached": True,
                 "stale": True,
@@ -628,7 +688,7 @@ def collection_items(
     return {
         "collection_id": collection.id,
         "page": cache.page,
-        "payload": cache.payload,
+        "payload": _augment_payload_with_catalog(cache.payload, db),
         "expires_at": cache.expires_at,
         "cached": False,
         "stale": False,

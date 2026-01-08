@@ -167,7 +167,7 @@ class MoviesViewModel(
             else -> emptyList()
         }
         return VodItem(
-            id = "tmdb:$id",
+            id = vodId ?: "tmdb:$id",
             name = displayTitle,
             poster = posterUrl,
             streamIcon = posterUrl,
@@ -175,7 +175,8 @@ class MoviesViewModel(
             backdrop = backdropUrl,
             overview = overview,
             genreNames = resolvedGenres.ifEmpty { null },
-            releaseDate = release
+            releaseDate = release,
+            streamUrl = streamUrl
         )
     }
 }
