@@ -66,12 +66,23 @@ data class TmdbPagedResponse(
     val results: List<TmdbItem> = emptyList()
 )
 
+data class TmdbGenre(
+    val id: Int,
+    val name: String
+)
+
 data class TmdbItem(
     val id: Int,
     val title: String? = null,
     val name: String? = null,
+    val overview: String? = null,
+    @Json(name = "genre_names") val genreNames: List<String>? = null,
+    @Json(name = "genre_ids") val genreIds: List<Int>? = null,
+    val genres: List<TmdbGenre>? = null,
     @Json(name = "poster_path") val posterPath: String? = null,
-    @Json(name = "backdrop_path") val backdropPath: String? = null
+    @Json(name = "backdrop_path") val backdropPath: String? = null,
+    @Json(name = "release_date") val releaseDate: String? = null,
+    @Json(name = "first_air_date") val firstAirDate: String? = null
 ) {
     val displayTitle: String
         get() = title ?: name ?: ""
@@ -150,7 +161,10 @@ data class VodItem(
     @Json(name = "tmdb_title") val tmdbTitle: String? = null,
     @Json(name = "tmdb_id") val tmdbId: Int? = null,
 
-    @Json(name = "container_extension") val containerExtension: String? = null
+    @Json(name = "container_extension") val containerExtension: String? = null,
+    val overview: String? = null,
+    @Json(name = "genre_names") val genreNames: List<String>? = null,
+    @Json(name = "release_date") val releaseDate: String? = null
 ) {
     val posterUrl: String? get() = customPosterUrl ?: poster ?: streamIcon
     val displayTitle: String

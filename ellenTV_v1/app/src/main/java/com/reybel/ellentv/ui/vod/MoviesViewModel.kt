@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val DEFAULT_PAGE_LIMIT = 30
-private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
+private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w780"
 
 data class MoviesCollectionUi(
     val collectionId: String,
@@ -159,12 +159,21 @@ class MoviesViewModel(
     private fun TmdbItem.toVodItem(): VodItem {
         val posterPath = posterPath ?: backdropPath
         val posterUrl = posterPath?.let { path -> "${TMDB_IMAGE_BASE}${path}" }
+        val release = releaseDate ?: firstAirDate
+        val resolvedGenres = when {
+            !genreNames.isNullOrEmpty() -> genreNames
+            !genres.isNullOrEmpty() -> genres.map { it.name }
+            else -> emptyList()
+        }
         return VodItem(
             id = "tmdb:$id",
             name = displayTitle,
             poster = posterUrl,
             streamIcon = posterUrl,
-            customPosterUrl = posterUrl
+            customPosterUrl = posterUrl,
+            overview = overview,
+            genreNames = resolvedGenres.ifEmpty { null },
+            releaseDate = release
         )
     }
 }
