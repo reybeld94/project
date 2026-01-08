@@ -42,7 +42,7 @@ import com.reybel.ellentv.ui.components.PosterSkeletonCard
 @Composable
 fun MoviesScreen(
     ui: MoviesUiState,
-    onRequestMore: (providerId: String, lastVisibleIndex: Int) -> Unit,
+    onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlay: (vodId: String) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -67,9 +67,9 @@ fun MoviesScreen(
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        itemsIndexed(ui.collections, key = { _, collection -> collection.providerId }) { index, collection ->
+        itemsIndexed(ui.collections, key = { _, collection -> collection.collectionId }) { index, collection ->
             MoviesCollectionSection(
-                title = collection.title.ifBlank { "Server #$index" },
+                title = collection.title.ifBlank { "Colección #${index + 1}" },
                 collection = collection,
                 onRequestMore = onRequestMore,
                 onPlay = onPlay,
@@ -83,7 +83,7 @@ fun MoviesScreen(
 private fun MoviesCollectionSection(
     title: String,
     collection: MoviesCollectionUi,
-    onRequestMore: (providerId: String, lastVisibleIndex: Int) -> Unit,
+    onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlay: (vodId: String) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit
 ) {
@@ -106,12 +106,12 @@ private fun MoviesCollectionSection(
         }
 
         val rowState = rememberLazyListState()
-        var focusedIndex by remember(collection.providerId) { mutableStateOf(0) }
+        var focusedIndex by remember(collection.collectionId) { mutableStateOf(0) }
         val focusedItem = collection.items.getOrNull(focusedIndex) ?: collection.items.firstOrNull()
 
         LaunchedEffect(rowState, collection.items.size) {
             snapshotFlow { rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
-                .collect { lastIdx -> onRequestMore(collection.providerId, lastIdx) }
+                .collect { lastIdx -> onRequestMore(collection.collectionId, lastIdx) }
         }
 
         LazyRow(
@@ -128,7 +128,7 @@ private fun MoviesCollectionSection(
                     MoviePosterCard(
                         item = item,
                         isLeftEdge = itemIndex == 0,
-                        onPlay = onPlay,
+                        onPlay = if (collection.isPlayable) onPlay else {},
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
                         onFocused = { focusedIndex = itemIndex }
                     )

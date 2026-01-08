@@ -2,8 +2,12 @@ package com.reybel.ellentv.ui.vod
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.reybel.ellentv.data.api.TmdbItem
+import com.reybel.ellentv.data.api.TmdbPagedResponse
 import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.data.repo.VodRepo
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,14 +15,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val DEFAULT_PAGE_LIMIT = 30
+private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
 data class MoviesCollectionUi(
-    val providerId: String,
+    val collectionId: String,
     val title: String,
+    val isPlayable: Boolean = false,
     val isLoading: Boolean = false,
     val items: List<VodItem> = emptyList(),
     val total: Int = 0,
-    val offset: Int = 0,
+    val page: Int = 0,
+    val totalPages: Int = 0,
     val error: String? = null
 )
 
@@ -36,77 +43,85 @@ class MoviesViewModel(
     private val _ui = MutableStateFlow(MoviesUiState())
     val ui: StateFlow<MoviesUiState> = _ui.asStateFlow()
 
+    private val moshi = Moshi.Builder()
+        .addLast(KotlinJsonAdapterFactory())
+        .build()
+
     fun open() {
         if (_ui.value.collections.isNotEmpty()) return
 
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
             try {
-                val providers = repo.fetchProviders()
-                val activeProviders = providers.filter { it.isActive }.ifEmpty { providers }
-                val selected = activeProviders.take(2)
-                val collections = selected.map { provider ->
+                val collections = repo.fetchCollections(enabled = true)
+                val enabledCollections = collections.ifEmpty {
+                    emptyList()
+                }
+                val collectionUi = enabledCollections.map { collection ->
                     MoviesCollectionUi(
-                        providerId = provider.id,
-                        title = provider.name,
+                        collectionId = collection.id,
+                        title = collection.name,
+                        isPlayable = false,
                         isLoading = true
                     )
                 }
 
-                _ui.update { it.copy(isLoading = false, collections = collections) }
+                _ui.update { it.copy(isLoading = false, collections = collectionUi) }
 
-                selected.forEach { provider ->
-                    loadFirstPage(provider.id)
+                enabledCollections.forEach { collection ->
+                    loadFirstPage(collection.id)
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isLoading = false, error = e.message ?: "Error loading providers") }
+                _ui.update { it.copy(isLoading = false, error = e.message ?: "Error loading collections") }
             }
         }
     }
 
-    private fun loadFirstPage(providerId: String) {
-        val limit = _ui.value.limit
-
+    private fun loadFirstPage(collectionId: String) {
         viewModelScope.launch {
-            updateCollection(providerId) { it.copy(isLoading = true, error = null, offset = 0) }
+            updateCollection(collectionId) { it.copy(isLoading = true, error = null, page = 0, totalPages = 0) }
             try {
-                val resp = repo.fetchVodPage(providerId, categoryExtId = null, limit = limit, offset = 0)
-                updateCollection(providerId) {
+                val resp = repo.fetchCollectionItems(collectionId, page = 1)
+                val parsed = parseTmdbPayload(resp.payload)
+                updateCollection(collectionId) {
                     it.copy(
                         isLoading = false,
-                        items = resp.items,
-                        total = resp.total,
-                        offset = resp.items.size
+                        items = parsed.items,
+                        total = parsed.totalResults,
+                        page = 1,
+                        totalPages = parsed.totalPages
                     )
                 }
             } catch (e: Exception) {
-                updateCollection(providerId) { it.copy(isLoading = false, error = e.message ?: "Error loading collection") }
+                updateCollection(collectionId) { it.copy(isLoading = false, error = e.message ?: "Error loading collection") }
             }
         }
     }
 
-    fun loadMoreIfNeeded(providerId: String, lastVisibleIndex: Int) {
-        val collection = _ui.value.collections.firstOrNull { it.providerId == providerId } ?: return
+    fun loadMoreIfNeeded(collectionId: String, lastVisibleIndex: Int) {
+        val collection = _ui.value.collections.firstOrNull { it.collectionId == collectionId } ?: return
         if (collection.isLoading) return
         if (collection.items.isEmpty()) return
-        if (collection.items.size >= collection.total) return
+        if (collection.page >= collection.totalPages) return
         if (lastVisibleIndex < collection.items.size - 6) return
 
-        val limit = _ui.value.limit
         viewModelScope.launch {
-            updateCollection(providerId) { it.copy(isLoading = true, error = null) }
+            updateCollection(collectionId) { it.copy(isLoading = true, error = null) }
             try {
-                val resp = repo.fetchVodPage(providerId, categoryExtId = null, limit = limit, offset = collection.offset)
-                updateCollection(providerId) {
+                val nextPage = collection.page + 1
+                val resp = repo.fetchCollectionItems(collectionId, page = nextPage)
+                val parsed = parseTmdbPayload(resp.payload)
+                updateCollection(collectionId) {
                     it.copy(
                         isLoading = false,
-                        items = it.items + resp.items,
-                        total = resp.total,
-                        offset = it.items.size + resp.items.size
+                        items = it.items + parsed.items,
+                        total = parsed.totalResults,
+                        page = nextPage,
+                        totalPages = parsed.totalPages
                     )
                 }
             } catch (e: Exception) {
-                updateCollection(providerId) { it.copy(isLoading = false, error = e.message ?: "Error loading more") }
+                updateCollection(collectionId) { it.copy(isLoading = false, error = e.message ?: "Error loading more") }
             }
         }
     }
@@ -116,15 +131,46 @@ class MoviesViewModel(
     }
 
     private fun updateCollection(
-        providerId: String,
+        collectionId: String,
         updater: (MoviesCollectionUi) -> MoviesCollectionUi
     ) {
         _ui.update { state ->
             state.copy(
                 collections = state.collections.map { collection ->
-                    if (collection.providerId == providerId) updater(collection) else collection
+                    if (collection.collectionId == collectionId) updater(collection) else collection
                 }
             )
         }
     }
+
+    private fun parseTmdbPayload(payload: Map<String, Any>): ParsedTmdbCollection {
+        val adapter = moshi.adapter(TmdbPagedResponse::class.java)
+        val parsed = adapter.fromJsonValue(payload)
+        val items = parsed?.results?.map { it.toVodItem() } ?: emptyList()
+        val totalResults = (payload["total_results"] as? Number)?.toInt() ?: items.size
+        val totalPages = parsed?.totalPages ?: (payload["total_pages"] as? Number)?.toInt() ?: 1
+        return ParsedTmdbCollection(
+            items = items,
+            totalResults = totalResults,
+            totalPages = totalPages
+        )
+    }
+
+    private fun TmdbItem.toVodItem(): VodItem {
+        val posterPath = posterPath ?: backdropPath
+        val posterUrl = posterPath?.let { path -> "${TMDB_IMAGE_BASE}${path}" }
+        return VodItem(
+            id = "tmdb:$id",
+            name = displayTitle,
+            poster = posterUrl,
+            streamIcon = posterUrl,
+            customPosterUrl = posterUrl
+        )
+    }
 }
+
+private data class ParsedTmdbCollection(
+    val items: List<VodItem>,
+    val totalResults: Int,
+    val totalPages: Int
+)
