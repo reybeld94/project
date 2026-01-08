@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,6 +110,12 @@ private fun MoviesCollectionSection(
         var focusedIndex by remember(collection.collectionId) { mutableStateOf(0) }
         val focusedItem = collection.items.getOrNull(focusedIndex) ?: collection.items.firstOrNull()
 
+        LaunchedEffect(focusedIndex, collection.items.size) {
+            if (collection.items.isNotEmpty()) {
+                rowState.animateScrollToItem(focusedIndex)
+            }
+        }
+
         LaunchedEffect(rowState, collection.items.size) {
             snapshotFlow { rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
                 .collect { lastIdx -> onRequestMore(collection.collectionId, lastIdx) }
@@ -127,7 +134,6 @@ private fun MoviesCollectionSection(
                 itemsIndexed(collection.items, key = { _, item -> item.id }) { itemIndex, item ->
                     MoviePosterCard(
                         item = item,
-                        isLeftEdge = itemIndex == 0,
                         onPlay = if (collection.isPlayable) onPlay else { _ -> },
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
                         onFocused = { focusedIndex = itemIndex }
@@ -143,7 +149,6 @@ private fun MoviesCollectionSection(
 @Composable
 private fun MoviePosterCard(
     item: VodItem,
-    isLeftEdge: Boolean,
     onPlay: (vodId: String) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
     onFocused: () -> Unit
@@ -151,6 +156,10 @@ private fun MoviePosterCard(
     var focused by remember { mutableStateOf(false) }
     val borderColor = if (focused) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.12f)
     val backgroundColor = if (focused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f)
+    val cardWidth = if (focused) 320.dp else 128.dp
+    val cardHeight = if (focused) 180.dp else 200.dp
+    val imageHeight = if (focused) 180.dp else 168.dp
+    val imageUrl = if (focused) item.backdropUrl ?: item.posterUrl else item.posterUrl
 
     Surface(
         onClick = { onPlay(item.id) },
@@ -159,30 +168,29 @@ private fun MoviePosterCard(
         border = androidx.compose.foundation.BorderStroke(3.dp, borderColor),
         tonalElevation = if (focused) 6.dp else 2.dp,
         modifier = Modifier
-            .width(128.dp)
-            .height(200.dp)
+            .width(cardWidth)
+            .height(cardHeight)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) {
                     onFocused()
-                    onLeftEdgeFocusChanged(isLeftEdge)
+                    onLeftEdgeFocusChanged(true)
                 }
             }
             .focusable()
     ) {
         Column(Modifier.fillMaxSize()) {
-            val poster = item.posterUrl
-            if (!poster.isNullOrBlank()) {
+            if (!imageUrl.isNullOrBlank()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(168.dp)
+                        .height(imageHeight)
                         .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 ) {
                     OptimizedAsyncImage(
-                        url = poster,
+                        url = imageUrl,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        contentScale = ContentScale.Crop,
                         targetSizePx = 512
                     )
                 }
@@ -190,28 +198,30 @@ private fun MoviePosterCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(168.dp)
+                        .height(imageHeight)
                         .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                         .background(Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No poster",
+                        text = "Sin imagen",
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = item.displayTitle,
-                color = Color.White.copy(alpha = if (focused) 1.0f else 0.9f),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+            if (!focused) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = item.displayTitle,
+                    color = Color.White.copy(alpha = if (focused) 1.0f else 0.9f),
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
         }
     }
 }

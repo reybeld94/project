@@ -159,6 +159,7 @@ class MoviesViewModel(
     private fun TmdbItem.toVodItem(): VodItem {
         val posterPath = posterPath ?: backdropPath
         val posterUrl = posterPath?.let { path -> "${TMDB_IMAGE_BASE}${path}" }
+        val backdropUrl = backdropPath?.let { path -> "${TMDB_IMAGE_BASE}${path}" }
         val release = releaseDate ?: firstAirDate
         val resolvedGenres = when {
             !genreNames.isNullOrEmpty() -> genreNames
@@ -171,6 +172,7 @@ class MoviesViewModel(
             poster = posterUrl,
             streamIcon = posterUrl,
             customPosterUrl = posterUrl,
+            backdrop = backdropUrl,
             overview = overview,
             genreNames = resolvedGenres.ifEmpty { null },
             releaseDate = release
