@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
@@ -101,7 +101,7 @@ def _refresh_cache_entry(collection_id: uuid.UUID, page: int) -> None:
             page=page,
             db=db,
         )
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         _upsert_cache_entry(db, collection=collection, page=page, payload=payload, now=now)
         db.commit()
     except HTTPException as exc:
@@ -129,7 +129,7 @@ def refresh_expired_collection_caches() -> dict:
     db = SessionLocal()
     refreshed = 0
     failed = 0
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     try:
         caches = db.execute(
             select(TmdbCollectionCache)
@@ -151,7 +151,7 @@ def refresh_expired_collection_caches() -> dict:
                     collection=cache.collection,
                     page=cache.page,
                     payload=payload,
-                    now=datetime.utcnow(),
+                    now=datetime.now(timezone.utc),
                 )
                 refreshed += 1
             except HTTPException as exc:
@@ -373,8 +373,8 @@ def create_collection(payload: CollectionCreate, db: Session = Depends(get_db)):
         cache_ttl_seconds=payload.cache_ttl_seconds,
         enabled=payload.enabled,
         order_index=payload.order_index,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
 
     db.add(collection)
@@ -518,7 +518,7 @@ def update_collection(
     if "order_index" in data:
         collection.order_index = int(data["order_index"] or 0)
 
-    collection.updated_at = datetime.utcnow()
+    collection.updated_at = datetime.now(timezone.utc)
 
     try:
         db.commit()
@@ -554,7 +554,7 @@ def collection_items(
         raise HTTPException(status_code=400, detail="Collection is disabled")
 
     page = max(1, int(page or 1))
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     cache = db.execute(
         select(TmdbCollectionCache)
