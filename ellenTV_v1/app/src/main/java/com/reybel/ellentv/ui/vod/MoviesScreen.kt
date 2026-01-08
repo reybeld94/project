@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,9 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +65,7 @@ fun MoviesScreen(
         verticalArrangement = Arrangement.spacedBy(30.dp),
         modifier = modifier
             .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         itemsIndexed(ui.collections, key = { _, collection -> collection.collectionId }) { index, collection ->
@@ -89,7 +89,7 @@ private fun MoviesCollectionSection(
     onLeftEdgeFocusChanged: (Boolean) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
@@ -142,6 +142,7 @@ private fun MoviesCollectionSection(
             }
         }
 
+        Spacer(Modifier.height(2.dp))
         MovieMetadataPanel(item = focusedItem)
     }
 }
@@ -157,14 +158,14 @@ private fun MoviePosterCard(
     val borderColor = if (focused) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.12f)
     val backgroundColor = if (focused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f)
     val cardWidth = if (focused) 320.dp else 128.dp
-    val cardHeight = if (focused) 180.dp else 200.dp
-    val imageHeight = if (focused) 180.dp else 168.dp
+    val cardHeight = 200.dp
+    val imageHeight = if (focused) 200.dp else 168.dp
     val imageUrl = if (focused) item.backdropUrl ?: item.posterUrl else item.posterUrl
 
     Surface(
         onClick = { onPlay(item.id) },
         color = backgroundColor,
-        shape = RoundedCornerShape(14.dp),
+        shape = RectangleShape,
         border = androidx.compose.foundation.BorderStroke(3.dp, borderColor),
         tonalElevation = if (focused) 6.dp else 2.dp,
         modifier = Modifier
@@ -185,7 +186,6 @@ private fun MoviePosterCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(imageHeight)
-                        .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 ) {
                     OptimizedAsyncImage(
                         url = imageUrl,
@@ -199,7 +199,6 @@ private fun MoviePosterCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(imageHeight)
-                        .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                         .background(Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -209,18 +208,6 @@ private fun MoviePosterCard(
                         fontSize = 12.sp
                     )
                 }
-            }
-
-            if (!focused) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = item.displayTitle,
-                    color = Color.White.copy(alpha = if (focused) 1.0f else 0.9f),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
             }
         }
     }
@@ -241,11 +228,8 @@ private fun MovieMetadataPanel(item: VodItem?) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.Black.copy(alpha = 0.35f))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
             text = "$typeLabel • $genre • ${year ?: "N/A"}",
