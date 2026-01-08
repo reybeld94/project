@@ -20,7 +20,7 @@ private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w780"
 data class MoviesCollectionUi(
     val collectionId: String,
     val title: String,
-    val isPlayable: Boolean = false,
+    val isPlayable: Boolean = true,
     val isLoading: Boolean = false,
     val items: List<VodItem> = emptyList(),
     val total: Int = 0,
@@ -61,7 +61,7 @@ class MoviesViewModel(
                     MoviesCollectionUi(
                         collectionId = collection.id,
                         title = collection.name,
-                        isPlayable = false,
+                        isPlayable = true,
                         isLoading = true
                     )
                 }

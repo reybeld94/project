@@ -5,7 +5,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,22 +60,42 @@ fun MoviesScreen(
         return
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(30.dp),
+    var focusedItem by remember(ui.collections) {
+        mutableStateOf(
+            ui.collections.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull()
+        )
+    }
+
+    LaunchedEffect(ui.collections) {
+        if (focusedItem == null) {
+            focusedItem = ui.collections.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull()
+        }
+    }
+
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        itemsIndexed(ui.collections, key = { _, collection -> collection.collectionId }) { index, collection ->
-            MoviesCollectionSection(
-                title = collection.title.ifBlank { "Colección #${index + 1}" },
-                collection = collection,
-                onRequestMore = onRequestMore,
-                onPlay = onPlay,
-                onLeftEdgeFocusChanged = onLeftEdgeFocusChanged
-            )
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(30.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            itemsIndexed(ui.collections, key = { _, collection -> collection.collectionId }) { index, collection ->
+                MoviesCollectionSection(
+                    title = collection.title.ifBlank { "Colección #${index + 1}" },
+                    collection = collection,
+                    onRequestMore = onRequestMore,
+                    onPlay = onPlay,
+                    onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
+                    onItemFocused = { focusedItem = it }
+                )
+            }
         }
+
+        MovieMetadataPanel(item = focusedItem)
     }
 }
 
@@ -86,7 +105,8 @@ private fun MoviesCollectionSection(
     collection: MoviesCollectionUi,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlay: (vodId: String) -> Unit,
-    onLeftEdgeFocusChanged: (Boolean) -> Unit
+    onLeftEdgeFocusChanged: (Boolean) -> Unit,
+    onItemFocused: (VodItem) -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -134,16 +154,16 @@ private fun MoviesCollectionSection(
                 itemsIndexed(collection.items, key = { _, item -> item.id }) { itemIndex, item ->
                     MoviePosterCard(
                         item = item,
-                        onPlay = if (collection.isPlayable) onPlay else { _ -> },
+                        onPlay = onPlay,
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
-                        onFocused = { focusedIndex = itemIndex }
+                        onFocused = {
+                            focusedIndex = itemIndex
+                            onItemFocused(item)
+                        }
                     )
                 }
             }
         }
-
-        Spacer(Modifier.height(2.dp))
-        MovieMetadataPanel(item = focusedItem)
     }
 }
 
@@ -159,7 +179,6 @@ private fun MoviePosterCard(
     val backgroundColor = if (focused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f)
     val cardWidth = if (focused) 320.dp else 128.dp
     val cardHeight = 200.dp
-    val imageHeight = if (focused) 200.dp else 168.dp
     val imageUrl = if (focused) item.backdropUrl ?: item.posterUrl else item.posterUrl
 
     Surface(
@@ -175,39 +194,34 @@ private fun MoviePosterCard(
                 focused = it.isFocused
                 if (it.isFocused) {
                     onFocused()
-                    onLeftEdgeFocusChanged(true)
                 }
+                onLeftEdgeFocusChanged(it.isFocused)
             }
             .focusable()
     ) {
-        Column(Modifier.fillMaxSize()) {
-            if (!imageUrl.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(imageHeight)
-                ) {
-                    OptimizedAsyncImage(
-                        url = imageUrl,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        targetSizePx = 512
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(imageHeight)
-                        .background(Color.Black.copy(alpha = 0.35f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Sin imagen",
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 12.sp
-                    )
-                }
+        if (!imageUrl.isNullOrBlank()) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                OptimizedAsyncImage(
+                    url = imageUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    targetSizePx = 512
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Sin imagen",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp
+                )
             }
         }
     }

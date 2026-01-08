@@ -605,8 +605,8 @@ fun TvHomeScreen(
         }
     }
 
-    // 🔧 NUEVO: BackHandler para VOD/Series
-    BackHandler(enabled = !showBoot && !isFullscreen && (section == AppSection.MOVIES || section == AppSection.SERIES)) {
+    // 🔧 BackHandler para Movies: abrir sidebar solo con back
+    BackHandler(enabled = !showBoot && !isFullscreen && section == AppSection.MOVIES) {
         drawerOpen = true
     }
 
@@ -650,7 +650,7 @@ fun TvHomeScreen(
                     // 🔧 CORREGIDO: Lógica mejorada para abrir el menú
                     val canOpen = when (section) {
                         AppSection.LIVE -> epgOnChannelColumn // Solo si estamos en la columna de canales
-                        AppSection.MOVIES, AppSection.SERIES -> vodLeftEdgeFocused // Solo en borde izquierdo
+                        AppSection.MOVIES, AppSection.SERIES -> false // Solo se abre con Back en Movies
                         else -> false
                     }
 
