@@ -181,7 +181,9 @@ private fun MoviePosterCard(
                 ) {
                     OptimizedAsyncImage(
                         url = poster,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        targetSizePx = 512
                     )
                 }
             } else {
@@ -217,9 +219,14 @@ private fun MoviePosterCard(
 @Composable
 private fun MovieMetadataPanel(item: VodItem?) {
     val title = item?.displayTitle ?: ""
-    val year = title.extractYearFromTitle()
-    val genre = "Sin género"
+    val year = item?.releaseDate?.extractYearFromDate() ?: title.extractYearFromTitle()
+    val genre = item?.genreNames
+        ?.filter { it.isNotBlank() }
+        ?.joinToString(", ")
+        ?.takeIf { it.isNotBlank() }
+        ?: "Sin género"
     val typeLabel = "Movie"
+    val synopsis = item?.overview?.takeIf { it.isNotBlank() } ?: "Sin sinopsis disponible."
 
     Column(
         modifier = Modifier
@@ -243,7 +250,7 @@ private fun MovieMetadataPanel(item: VodItem?) {
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "Sin sinopsis disponible.",
+            text = synopsis,
             color = Color.White.copy(alpha = 0.75f),
             style = MaterialTheme.typography.bodySmall,
             maxLines = 3,
@@ -255,4 +262,8 @@ private fun MovieMetadataPanel(item: VodItem?) {
 private fun String.extractYearFromTitle(): String? {
     val match = Regex("(19|20)\\d{2}").find(this)
     return match?.value
+}
+
+private fun String.extractYearFromDate(): String? {
+    return takeIf { length >= 4 }?.substring(0, 4)
 }
