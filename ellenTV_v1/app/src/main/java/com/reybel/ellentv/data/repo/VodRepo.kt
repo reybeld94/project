@@ -8,6 +8,10 @@ import com.reybel.ellentv.data.api.ApiService
 class VodRepo {
     private val api = ApiClient.retrofit.create(ApiService::class.java)
 
+    suspend fun fetchProviders(): List<ProviderOut> {
+        return api.getProviders()
+    }
+
     suspend fun fetchVodCategories(providerId: String): List<ProviderCategoryOut> {
         return api.getProviderCategories(
             providerId = providerId,
