@@ -1,20 +1,13 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from datetime import datetime
-from app.models import Category
-from app.xtream_client import xtream_get, XtreamError
+
 from app.deps import get_db
-from app.models import Provider
+from app.models import Category, LiveStream, Provider, SeriesItem, VodStream
 from app.schemas import ProviderCreate, ProviderOut, ProviderUpdate
-from app.models import LiveStream
-from datetime import datetime
-from sqlalchemy import select
-from app.models import Category, LiveStream, Provider
-from app.xtream_client import xtream_get
-from fastapi import HTTPException, Depends
-from sqlalchemy.orm import Session
-from app.models import Provider, Category, LiveStream, VodStream, SeriesItem
+from app.xtream_client import XtreamError, xtream_get
 
 
 router = APIRouter(prefix="/providers", tags=["providers"])
@@ -515,6 +508,20 @@ def sync_provider_vod_streams(
         changed = 0
         now = datetime.utcnow()
 
+        def _pick_canonical(streams: list[VodStream], stream_id: int) -> VodStream:
+            preferred = [s for s in streams if s.provider_stream_id == stream_id] or streams
+
+            def score(item: VodStream) -> tuple:
+                return (
+                    1 if item.tmdb_id is not None else 0,
+                    1 if item.tmdb_title else 0,
+                    1 if item.normalized_name else 0,
+                    1 if item.tmdb_overview else 0,
+                    item.updated_at or item.created_at,
+                )
+
+            return max(preferred, key=score)
+
         for item in raw:
             try:
                 ext_stream_id = int(item.get("stream_id"))
@@ -529,14 +536,18 @@ def sync_provider_vod_streams(
 
             seen.add(ext_stream_id)
 
-            existing = db.execute(
+            existing_matches = db.execute(
                 select(VodStream).where(
                     VodStream.provider_id == p.id,
-                    VodStream.provider_stream_id == ext_stream_id,
+                    or_(
+                        VodStream.provider_stream_id == ext_stream_id,
+                        func.lower(VodStream.name) == name.lower(),
+                    ),
                 )
-            ).scalar_one_or_none()
+            ).scalars().all()
 
-            if existing:
+            if existing_matches:
+                existing = _pick_canonical(existing_matches, ext_stream_id)
                 if (
                     existing.name != name
                     or existing.stream_icon != icon
@@ -544,6 +555,7 @@ def sync_provider_vod_streams(
                     or existing.container_extension != container_ext
                     or existing.rating != rating
                     or existing.added != added
+                    or existing.provider_stream_id != ext_stream_id
                     or existing.is_active is False
                 ):
                     existing.name = name
@@ -552,8 +564,15 @@ def sync_provider_vod_streams(
                     existing.container_extension = container_ext
                     existing.rating = rating
                     existing.added = added
+                    existing.provider_stream_id = ext_stream_id
                     existing.is_active = True
                     existing.updated_at = now
+                    changed += 1
+
+                for dup in existing_matches:
+                    if dup.id == existing.id:
+                        continue
+                    db.delete(dup)
                     changed += 1
             else:
                 db.add(VodStream(
