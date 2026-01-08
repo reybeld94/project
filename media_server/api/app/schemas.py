@@ -202,7 +202,7 @@ class CollectionCacheOut(BaseModel):
     collection_id: UUID
     page: int
     payload: dict
-    expires_at: str | None = None
+    expires_at: datetime | None = None
     cached: bool
     stale: bool = False
 
