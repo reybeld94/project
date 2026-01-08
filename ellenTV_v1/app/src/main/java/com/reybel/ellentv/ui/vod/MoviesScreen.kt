@@ -60,15 +60,18 @@ fun MoviesScreen(
         return
     }
 
+    val initialCollection = ui.collections.firstOrNull { it.items.isNotEmpty() }
     var focusedItem by remember(ui.collections) {
-        mutableStateOf(
-            ui.collections.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull()
-        )
+        mutableStateOf(initialCollection?.items?.firstOrNull())
+    }
+    var focusedCollectionId by remember(ui.collections) {
+        mutableStateOf(initialCollection?.collectionId)
     }
 
     LaunchedEffect(ui.collections) {
         if (focusedItem == null) {
-            focusedItem = ui.collections.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull()
+            focusedItem = initialCollection?.items?.firstOrNull()
+            focusedCollectionId = initialCollection?.collectionId
         }
     }
 
@@ -90,12 +93,15 @@ fun MoviesScreen(
                     onRequestMore = onRequestMore,
                     onPlay = onPlay,
                     onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
-                    onItemFocused = { focusedItem = it }
+                    onItemFocused = { collectionId, item ->
+                        focusedCollectionId = collectionId
+                        focusedItem = item
+                    },
+                    showMetadata = collection.collectionId == focusedCollectionId,
+                    metadataItem = focusedItem
                 )
             }
         }
-
-        MovieMetadataPanel(item = focusedItem)
     }
 }
 
@@ -106,7 +112,9 @@ private fun MoviesCollectionSection(
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlay: (vodId: String) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
-    onItemFocused: (VodItem) -> Unit
+    onItemFocused: (collectionId: String, item: VodItem) -> Unit,
+    showMetadata: Boolean,
+    metadataItem: VodItem?
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -158,11 +166,15 @@ private fun MoviesCollectionSection(
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
                         onFocused = {
                             focusedIndex = itemIndex
-                            onItemFocused(item)
+                            onItemFocused(collection.collectionId, item)
                         }
                     )
                 }
             }
+        }
+
+        if (showMetadata) {
+            MovieMetadataPanel(item = metadataItem)
         }
     }
 }
@@ -232,7 +244,10 @@ private fun MovieMetadataPanel(item: VodItem?) {
     val title = item?.displayTitle ?: ""
     val year = item?.releaseDate?.extractYearFromDate() ?: title.extractYearFromTitle()
     val genre = item?.genreNames
+        ?.flatMap { it.split(",") }
+        ?.map { it.trim() }
         ?.filter { it.isNotBlank() }
+        ?.distinct()
         ?.joinToString(", ")
         ?.takeIf { it.isNotBlank() }
         ?: "Sin género"
