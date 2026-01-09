@@ -156,14 +156,31 @@ async def _start_tmdb_auto_sync():
                     db.close()
 
                 if not enabled:
+                    log.warning(
+                        "TMDB auto-sync: idle (disabled=%s, token=%s, api_key=%s)",
+                        not bool(cfg.is_enabled),
+                        "set" if cfg.read_access_token else "missing",
+                        "set" if cfg.api_key else "missing",
+                    )
                     await asyncio.sleep(idle_s)
                     continue
 
                 # 2) Ejecutar tandas pequeñas (en thread)
+                log.info(
+                    "TMDB auto-sync: starting batch (movies=%s, series=%s)",
+                    TMDB_AUTO_SYNC_BATCH_MOVIES,
+                    TMDB_AUTO_SYNC_BATCH_SERIES,
+                )
                 r_movies = await asyncio.to_thread(_sync_tmdb_movies_blocking)
                 r_series = await asyncio.to_thread(_sync_tmdb_series_blocking)
 
                 processed = int((r_movies or {}).get("processed", 0)) + int((r_series or {}).get("processed", 0))
+                log.info(
+                    "TMDB auto-sync: batch complete (processed=%s, movies=%s, series=%s)",
+                    processed,
+                    (r_movies or {}).get("processed", 0),
+                    (r_series or {}).get("processed", 0),
+                )
 
                 # 3) Si no había trabajo, duerme más para ser “Plex-like” y conservador
                 await asyncio.sleep(idle_s if processed == 0 else interval_s)
