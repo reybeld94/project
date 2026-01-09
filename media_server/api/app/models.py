@@ -305,6 +305,8 @@ class VodStream(Base):
     tmdb_status: Mapped[str] = mapped_column(String(20), default="missing", nullable=False)  # missing|synced|failed
     tmdb_last_sync: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tmdb_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tmdb_error_kind: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tmdb_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     tmdb_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tmdb_overview: Mapped[str | None] = mapped_column(String(4000), nullable=True)
@@ -320,7 +322,16 @@ class VodStream(Base):
 
 class SeriesItem(Base):
     __tablename__ = "series_items"
-    __table_args__ = (UniqueConstraint("provider_id", "provider_series_id", name="uq_series_provider_seriesid"),)
+    __table_args__ = (
+        UniqueConstraint("provider_id", "provider_series_id", name="uq_series_provider_seriesid"),
+        Index(
+            "uq_series_provider_tmdb_id",
+            "provider_id",
+            "tmdb_id",
+            unique=True,
+            postgresql_where=text("tmdb_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
@@ -347,6 +358,8 @@ class SeriesItem(Base):
     tmdb_status: Mapped[str] = mapped_column(String(20), default="missing", nullable=False)
     tmdb_last_sync: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tmdb_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tmdb_error_kind: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tmdb_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     tmdb_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tmdb_overview: Mapped[str | None] = mapped_column(String(4000), nullable=True)

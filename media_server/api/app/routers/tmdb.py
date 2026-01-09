@@ -4,52 +4,19 @@ import threading
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func
 
 from app.deps import get_db
 from app.models import TmdbConfig, VodStream, SeriesItem
 from app.schemas import TmdbConfigOut, TmdbConfigUpdate, TmdbStatusOut, TmdbActivityOut
-from app.tmdb_client import RateLimiter, find_and_fetch_movie, find_and_fetch_tv, tmdb_get_json
+from app.tmdb_client import RateLimiter, tmdb_get_json
+from app.tmdb_sync import run_tmdb_sync, run_tmdb_sync_now
 
 router = APIRouter(prefix="/tmdb", tags=["tmdb"])
 GENRE_CACHE_TTL = timedelta(hours=24)
 GENRE_ALLOWED_KINDS = {"movie", "tv"}
 _genre_cache: dict[tuple[str, str], dict] = {}
 _genre_lock = threading.Lock()
-
-def _copy_tmdb_fields(target: VodStream, source: VodStream) -> None:
-    target.tmdb_id = source.tmdb_id
-    target.tmdb_status = source.tmdb_status
-    target.tmdb_last_sync = source.tmdb_last_sync
-    target.tmdb_error = None
-    target.tmdb_title = source.tmdb_title
-    target.tmdb_overview = source.tmdb_overview
-    target.tmdb_release_date = source.tmdb_release_date
-    target.tmdb_genres = source.tmdb_genres
-    target.tmdb_vote_average = source.tmdb_vote_average
-    target.tmdb_poster_path = source.tmdb_poster_path
-    target.tmdb_backdrop_path = source.tmdb_backdrop_path
-    target.tmdb_raw = source.tmdb_raw
-
-def _dedupe_tmdb_streams(db: Session, provider_id, tmdb_id: int | None) -> None:
-    if tmdb_id is None:
-        return
-    group = db.execute(
-        select(VodStream)
-        .where(VodStream.provider_id == provider_id, VodStream.tmdb_id == tmdb_id)
-        .order_by(VodStream.created_at.desc(), VodStream.id.desc())
-    ).scalars().all()
-    if len(group) < 2:
-        return
-    winner = group[0]
-    synced_donor = next((item for item in group if item.tmdb_status == "synced"), None)
-    if winner.tmdb_status != "synced" and synced_donor:
-        _copy_tmdb_fields(winner, synced_donor)
-        winner.tmdb_status = "synced"
-        winner.tmdb_error = None
-    for dup in group[1:]:
-        db.delete(dup)
-
 
 def mask(s: str | None, keep: int = 4) -> str | None:
     if not s:
@@ -265,87 +232,17 @@ def sync_movies(limit: int = 20, approved_only: bool = True, cooldown_minutes: i
     if not token and not api_key:
         raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
 
-    stmt = select(VodStream).where(VodStream.tmdb_status != "synced")
-
-    if approved_only:
-        stmt = stmt.where(VodStream.approved == True)
-
-    if cooldown_minutes and cooldown_minutes > 0:
-        cutoff = datetime.utcnow() - timedelta(minutes=cooldown_minutes)
-        stmt = stmt.where(or_(VodStream.tmdb_last_sync == None, VodStream.tmdb_last_sync < cutoff))
-
-    stmt = stmt.order_by(
-        VodStream.tmdb_last_sync.asc().nullsfirst(),
-        VodStream.created_at.asc(),
+    result = run_tmdb_sync(
+        kind="movie",
+        limit=max(1, min(limit, 200)),
+        approved_only=approved_only,
+        cfg=cfg,
+        db=db,
+        cooldown_override_minutes=cooldown_minutes if cooldown_minutes > 0 else None,
     )
-
-    rows = db.execute(stmt.limit(max(1, min(limit, 200)))).scalars().all()
-
-    processed = synced = missing = failed = 0
-
-    for v in rows:
-        processed += 1
-        title = (v.normalized_name or v.name or "").strip()
-        try:
-            best, details = find_and_fetch_movie(
-                title,
-                token=token,
-                api_key=api_key,
-                language=cfg.language or "en-US",
-                region=cfg.region or "US",
-                rps=cfg.requests_per_second or 5,
-            )
-
-            if not details:
-                v.tmdb_status = "missing"
-                v.tmdb_error = None
-                v.tmdb_last_sync = datetime.utcnow()
-                db.commit()
-                missing += 1
-                continue
-
-            v.tmdb_id = int(details.get("id"))
-            v.tmdb_status = "synced"
-            v.tmdb_error = None
-            v.tmdb_last_sync = datetime.utcnow()
-
-            v.tmdb_title = details.get("title")
-            v.tmdb_overview = details.get("overview")
-            v.tmdb_poster_path = details.get("poster_path")
-            v.tmdb_backdrop_path = details.get("backdrop_path")
-            v.tmdb_vote_average = details.get("vote_average")
-            rd = (details.get("release_date") or "").strip()
-            if rd:
-                try:
-                    v.tmdb_release_date = datetime.strptime(rd, "%Y-%m-%d")
-                except Exception:
-                    v.tmdb_release_date = None
-
-            # genres: [{id,name},...]
-            v.tmdb_genres = [g.get("name") for g in (details.get("genres") or []) if g.get("name")]
-
-            v.tmdb_raw = details
-
-            db.flush()
-            _dedupe_tmdb_streams(db, v.provider_id, v.tmdb_id)
-            db.commit()
-            synced += 1
-
-        except Exception as e:
-            v.tmdb_status = "failed"
-            v.tmdb_error = str(e)[:480]
-            v.tmdb_last_sync = datetime.utcnow()
-            db.commit()
-            failed += 1
-
-    return {
-        "processed": processed,
-        "synced": synced,
-        "missing": missing,
-        "failed": failed,
-        "approved_only": approved_only,
-        "rps": cfg.requests_per_second,
-    }
+    result["approved_only"] = approved_only
+    result["cooldown_minutes_override"] = cooldown_minutes if cooldown_minutes > 0 else None
+    return result
 
 @router.post("/sync/series")
 def sync_series(limit: int = 20, approved_only: bool = True, cooldown_minutes: int = 0, db: Session = Depends(get_db)):
@@ -358,79 +255,28 @@ def sync_series(limit: int = 20, approved_only: bool = True, cooldown_minutes: i
     if not token and not api_key:
         raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
 
-    stmt = select(SeriesItem).where(SeriesItem.tmdb_status != "synced")
-
-    if approved_only:
-        stmt = stmt.where(SeriesItem.approved == True)
-
-    if cooldown_minutes and cooldown_minutes > 0:
-        cutoff = datetime.utcnow() - timedelta(minutes=cooldown_minutes)
-        stmt = stmt.where(or_(SeriesItem.tmdb_last_sync == None, SeriesItem.tmdb_last_sync < cutoff))
-
-    stmt = stmt.order_by(
-        SeriesItem.tmdb_last_sync.asc().nullsfirst(),
-        SeriesItem.created_at.asc(),
+    result = run_tmdb_sync(
+        kind="series",
+        limit=max(1, min(limit, 200)),
+        approved_only=approved_only,
+        cfg=cfg,
+        db=db,
+        cooldown_override_minutes=cooldown_minutes if cooldown_minutes > 0 else None,
     )
+    result["approved_only"] = approved_only
+    result["cooldown_minutes_override"] = cooldown_minutes if cooldown_minutes > 0 else None
+    return result
 
-    rows = db.execute(stmt.limit(max(1, min(limit, 200)))).scalars().all()
 
-    processed = synced = missing = failed = 0
+@router.post("/sync/now")
+def sync_now(limit: int = 100, approved_only: bool = True, db: Session = Depends(get_db)):
+    cfg = get_or_create_cfg(db)
+    if not cfg.is_enabled:
+        raise HTTPException(status_code=400, detail="TMDB is disabled in settings")
 
-    for s in rows:
-        processed += 1
-        title = (s.normalized_name or s.name or "").strip()
-        try:
-            best, details = find_and_fetch_tv(
-                title,
-                token=token,
-                api_key=api_key,
-                language=cfg.language or "en-US",
-                region=cfg.region or "US",
-                rps=cfg.requests_per_second or 5,
-            )
+    token = cfg.read_access_token
+    api_key = cfg.api_key
+    if not token and not api_key:
+        raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
 
-            if not details:
-                s.tmdb_status = "missing"
-                s.tmdb_error = None
-                s.tmdb_last_sync = datetime.utcnow()
-                db.commit()
-                missing += 1
-                continue
-
-            s.tmdb_id = int(details.get("id"))
-            s.tmdb_status = "synced"
-            s.tmdb_error = None
-            s.tmdb_last_sync = datetime.utcnow()
-
-            s.tmdb_title = details.get("name")
-            s.tmdb_overview = details.get("overview")
-            s.tmdb_poster_path = details.get("poster_path")
-            s.tmdb_backdrop_path = details.get("backdrop_path")
-            s.tmdb_vote_average = details.get("vote_average")
-            ad = (details.get("first_air_date") or "").strip()
-            if ad:
-                try:
-                    s.tmdb_release_date = datetime.strptime(ad, "%Y-%m-%d")
-                except Exception:
-                    s.tmdb_release_date = None
-            s.tmdb_genres = [g.get("name") for g in (details.get("genres") or []) if g.get("name")]
-            s.tmdb_raw = details
-
-            db.commit()
-            synced += 1
-
-        except Exception as e:
-            s.tmdb_status = "failed"
-            s.tmdb_error = str(e)[:480]
-            s.tmdb_last_sync = datetime.utcnow()
-            db.commit()
-            failed += 1
-
-    return {
-        "processed": processed,
-        "synced": synced,
-        "missing": missing,
-        "failed": failed,
-        "approved_only": approved_only,
-        "rps": cfg.requests_per_second,
-    }
+    return run_tmdb_sync_now(limit=max(1, min(limit, 500)), approved_only=approved_only, cfg=cfg, db=db)
