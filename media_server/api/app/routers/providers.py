@@ -508,19 +508,26 @@ def sync_provider_vod_streams(
         changed = 0
         now = datetime.utcnow()
 
-        def _pick_canonical(streams: list[VodStream], stream_id: int) -> VodStream:
-            preferred = [s for s in streams if s.provider_stream_id == stream_id] or streams
+        def _parse_tmdb_id(raw_value) -> int | None:
+            try:
+                parsed = int(raw_value)
+            except Exception:
+                return None
+            return parsed if parsed > 0 else None
 
-            def score(item: VodStream) -> tuple:
-                return (
-                    1 if item.tmdb_id is not None else 0,
-                    1 if item.tmdb_title else 0,
-                    1 if item.normalized_name else 0,
-                    1 if item.tmdb_overview else 0,
-                    item.updated_at or item.created_at,
-                )
-
-            return max(preferred, key=score)
+        def _copy_tmdb_fields(target: VodStream, source: VodStream) -> None:
+            target.tmdb_id = source.tmdb_id
+            target.tmdb_status = source.tmdb_status
+            target.tmdb_last_sync = source.tmdb_last_sync
+            target.tmdb_error = None
+            target.tmdb_title = source.tmdb_title
+            target.tmdb_overview = source.tmdb_overview
+            target.tmdb_release_date = source.tmdb_release_date
+            target.tmdb_genres = source.tmdb_genres
+            target.tmdb_vote_average = source.tmdb_vote_average
+            target.tmdb_poster_path = source.tmdb_poster_path
+            target.tmdb_backdrop_path = source.tmdb_backdrop_path
+            target.tmdb_raw = source.tmdb_raw
 
         for item in raw:
             try:
@@ -533,46 +540,47 @@ def sync_provider_vod_streams(
             container_ext = (item.get("container_extension") or None)
             rating = (item.get("rating") or None)
             added = (item.get("added") or None)
+            tmdb_id = _parse_tmdb_id(item.get("tmdb_id") or item.get("tmdb"))
 
             seen.add(ext_stream_id)
 
-            existing_matches = db.execute(
-                select(VodStream).where(
+            existing = db.execute(
+                select(VodStream)
+                .where(
                     VodStream.provider_id == p.id,
-                    or_(
-                        VodStream.provider_stream_id == ext_stream_id,
-                        func.lower(VodStream.name) == name.lower(),
-                    ),
+                    VodStream.provider_stream_id == ext_stream_id,
                 )
+                .order_by(VodStream.created_at.desc(), VodStream.id.desc())
             ).scalars().all()
 
-            if existing_matches:
-                existing = _pick_canonical(existing_matches, ext_stream_id)
-                if (
-                    existing.name != name
-                    or existing.stream_icon != icon
-                    or existing.category_id != cat.id
-                    or existing.container_extension != container_ext
-                    or existing.rating != rating
-                    or existing.added != added
-                    or existing.provider_stream_id != ext_stream_id
-                    or existing.is_active is False
-                ):
-                    existing.name = name
-                    existing.stream_icon = icon
-                    existing.category_id = cat.id
-                    existing.container_extension = container_ext
-                    existing.rating = rating
-                    existing.added = added
-                    existing.provider_stream_id = ext_stream_id
-                    existing.is_active = True
-                    existing.updated_at = now
-                    changed += 1
+            if not existing and tmdb_id is not None:
+                existing = db.execute(
+                    select(VodStream)
+                    .where(VodStream.provider_id == p.id, VodStream.tmdb_id == tmdb_id)
+                    .order_by(VodStream.created_at.desc(), VodStream.id.desc())
+                ).scalars().all()
 
-                for dup in existing_matches:
-                    if dup.id == existing.id:
-                        continue
-                    db.delete(dup)
+            if existing:
+                current = existing[0]
+                if (
+                    current.name != name
+                    or current.stream_icon != icon
+                    or current.category_id != cat.id
+                    or current.container_extension != container_ext
+                    or current.rating != rating
+                    or current.added != added
+                    or current.provider_stream_id != ext_stream_id
+                    or current.is_active is False
+                ):
+                    current.name = name
+                    current.stream_icon = icon
+                    current.category_id = cat.id
+                    current.container_extension = container_ext
+                    current.rating = rating
+                    current.added = added
+                    current.provider_stream_id = ext_stream_id
+                    current.is_active = True
+                    current.updated_at = now
                     changed += 1
             else:
                 db.add(VodStream(
@@ -603,6 +611,39 @@ def sync_provider_vod_streams(
                 if s.provider_stream_id not in seen:
                     s.is_active = False
                     s.updated_at = now
+                    changed += 1
+
+        if seen:
+            dup_rows = db.execute(
+                select(VodStream)
+                .where(
+                    VodStream.provider_id == p.id,
+                    VodStream.provider_stream_id.in_(seen),
+                )
+                .order_by(
+                    VodStream.provider_stream_id.asc(),
+                    VodStream.created_at.desc(),
+                    VodStream.id.desc(),
+                )
+            ).scalars().all()
+
+            grouped: dict[int, list[VodStream]] = {}
+            for row in dup_rows:
+                grouped.setdefault(row.provider_stream_id, []).append(row)
+
+            for stream_id, group in grouped.items():
+                if len(group) < 2:
+                    continue
+                winner = group[0]
+                synced_donor = next((item for item in group if item.tmdb_status == "synced"), None)
+                if winner.tmdb_status != "synced" and synced_donor:
+                    _copy_tmdb_fields(winner, synced_donor)
+                    winner.tmdb_status = "synced"
+                    winner.tmdb_error = None
+                    winner.updated_at = now
+                    changed += 1
+                for dup in group[1:]:
+                    db.delete(dup)
                     changed += 1
 
         db.commit()

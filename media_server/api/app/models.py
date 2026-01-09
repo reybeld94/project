@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Integer
-from sqlalchemy import String, DateTime, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import String, DateTime, Boolean, ForeignKey, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Index
@@ -263,7 +263,16 @@ class EpgProgram(Base):
 
 class VodStream(Base):
     __tablename__ = "vod_streams"
-    __table_args__ = (UniqueConstraint("provider_id", "provider_stream_id", name="uq_vod_streams_provider_streamid"),)
+    __table_args__ = (
+        UniqueConstraint("provider_id", "provider_stream_id", name="uq_vod_streams_provider_streamid"),
+        Index(
+            "uq_vod_streams_provider_tmdb_id",
+            "provider_id",
+            "tmdb_id",
+            unique=True,
+            postgresql_where=text("tmdb_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
