@@ -17,6 +17,39 @@ GENRE_ALLOWED_KINDS = {"movie", "tv"}
 _genre_cache: dict[tuple[str, str], dict] = {}
 _genre_lock = threading.Lock()
 
+def _copy_tmdb_fields(target: VodStream, source: VodStream) -> None:
+    target.tmdb_id = source.tmdb_id
+    target.tmdb_status = source.tmdb_status
+    target.tmdb_last_sync = source.tmdb_last_sync
+    target.tmdb_error = None
+    target.tmdb_title = source.tmdb_title
+    target.tmdb_overview = source.tmdb_overview
+    target.tmdb_release_date = source.tmdb_release_date
+    target.tmdb_genres = source.tmdb_genres
+    target.tmdb_vote_average = source.tmdb_vote_average
+    target.tmdb_poster_path = source.tmdb_poster_path
+    target.tmdb_backdrop_path = source.tmdb_backdrop_path
+    target.tmdb_raw = source.tmdb_raw
+
+def _dedupe_tmdb_streams(db: Session, provider_id, tmdb_id: int | None) -> None:
+    if tmdb_id is None:
+        return
+    group = db.execute(
+        select(VodStream)
+        .where(VodStream.provider_id == provider_id, VodStream.tmdb_id == tmdb_id)
+        .order_by(VodStream.created_at.desc(), VodStream.id.desc())
+    ).scalars().all()
+    if len(group) < 2:
+        return
+    winner = group[0]
+    synced_donor = next((item for item in group if item.tmdb_status == "synced"), None)
+    if winner.tmdb_status != "synced" and synced_donor:
+        _copy_tmdb_fields(winner, synced_donor)
+        winner.tmdb_status = "synced"
+        winner.tmdb_error = None
+    for dup in group[1:]:
+        db.delete(dup)
+
 
 def mask(s: str | None, keep: int = 4) -> str | None:
     if not s:
@@ -293,6 +326,8 @@ def sync_movies(limit: int = 20, approved_only: bool = True, cooldown_minutes: i
 
             v.tmdb_raw = details
 
+            db.flush()
+            _dedupe_tmdb_streams(db, v.provider_id, v.tmdb_id)
             db.commit()
             synced += 1
 
