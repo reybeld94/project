@@ -243,14 +243,18 @@ export function TmdbTab() {
     onClick: async () => {
       msg.textContent = "Saving…";
       try {
-        await api.tmdb.saveConfig({
+        const payload = {
           is_enabled: enabled,
-          api_key: apiKey || null,
-          read_access_token: token || null,
           language: (language || "").trim() || null,
           region: (region || "").trim() || null,
           requests_per_second: rps || 5,
-        });
+        };
+        const apiKeyValue = (apiKey || "").trim();
+        const tokenValue = (token || "").trim();
+        if (apiKeyValue) payload.api_key = apiKeyValue;
+        if (tokenValue) payload.read_access_token = tokenValue;
+
+        await api.tmdb.saveConfig(payload);
         await load();
         msg.textContent = "Saved ✅";
       } catch (e) {
