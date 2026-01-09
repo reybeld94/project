@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from sqlalchemy import select
@@ -198,8 +198,16 @@ def _calculate_failed_cooldown(settings: TmdbSyncSettings, fail_count: int, erro
     return timedelta(minutes=settings.cooldown_failed_minutes * multiplier)
 
 
+def _normalize_sync_time(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def _eligible_for_sync(item, now: datetime, settings: TmdbSyncSettings) -> bool:
-    last_sync = item.tmdb_last_sync
+    last_sync = _normalize_sync_time(item.tmdb_last_sync)
     status = (item.tmdb_status or "missing").lower()
     if status == "synced":
         if not last_sync:
@@ -225,7 +233,7 @@ def _select_candidates(
     approved_only: bool,
     settings: TmdbSyncSettings,
 ) -> list:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     candidate_limit = min(max(limit * 5, limit), 1000)
     stmt = select(model)
     if approved_only:
@@ -296,7 +304,7 @@ async def _sync_one_task(
                     item.tmdb_status = "missing"
                     item.tmdb_error = None
                     item.tmdb_error_kind = "not_found"
-                    item.tmdb_last_sync = datetime.utcnow()
+                    item.tmdb_last_sync = datetime.now(timezone.utc)
                     item.tmdb_fail_count = 0
                 metrics.missing += 1
                 return
@@ -312,12 +320,12 @@ async def _sync_one_task(
                 item.tmdb_status = "missing"
                 item.tmdb_error = None
                 item.tmdb_error_kind = "not_found"
-                item.tmdb_last_sync = datetime.utcnow()
+                item.tmdb_last_sync = datetime.now(timezone.utc)
                 item.tmdb_fail_count = 0
             metrics.missing += 1
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         with db.begin():
             item.tmdb_id = int(details.get("id"))
             item.tmdb_status = "synced"
@@ -360,7 +368,7 @@ async def _sync_one_task(
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
             item.tmdb_error_kind = exc.kind
-            item.tmdb_last_sync = datetime.utcnow()
+            item.tmdb_last_sync = datetime.now(timezone.utc)
             item.tmdb_fail_count = (item.tmdb_fail_count or 0) + 1
         metrics.failed += 1
     except Exception as exc:
@@ -370,7 +378,7 @@ async def _sync_one_task(
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
             item.tmdb_error_kind = "unknown"
-            item.tmdb_last_sync = datetime.utcnow()
+            item.tmdb_last_sync = datetime.now(timezone.utc)
             item.tmdb_fail_count = (item.tmdb_fail_count or 0) + 1
         metrics.failed += 1
     finally:
