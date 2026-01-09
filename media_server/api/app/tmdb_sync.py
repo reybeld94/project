@@ -467,6 +467,17 @@ def run_tmdb_sync(
         )
     else:
         metrics.finish()
+        log.info(
+            "TMDB sync %s: no eligible items (limit=%s approved_only=%s resync_days=%s cooldown_missing=%s cooldown_failed=%s cooldown_transient=%s cooldown_invalid_days=%s)",
+            kind,
+            limit,
+            approved_only,
+            settings.resync_days,
+            settings.cooldown_missing_minutes,
+            settings.cooldown_failed_minutes,
+            settings.cooldown_transient_minutes,
+            settings.cooldown_invalid_days,
+        )
     eta = metrics.eta_seconds(max(0, metrics.queued - metrics.processed))
     log.info(
         "TMDB sync %s: queued=%s processed=%s success=%s missing=%s failed=%s avg_time=%.2fs req_total=%s req_per_item=%.2f retries=%s 429=%s eta=%.1fs",
