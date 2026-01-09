@@ -33,7 +33,6 @@ TMDB_AUTO_SYNC = os.getenv("TMDB_AUTO_SYNC", "1").strip().lower() not in {"0", "
 TMDB_AUTO_SYNC_MINUTES = int(os.getenv("TMDB_AUTO_SYNC_MINUTES", "5"))
 TMDB_AUTO_SYNC_BATCH_MOVIES = int(os.getenv("TMDB_AUTO_SYNC_BATCH_MOVIES", "5"))
 TMDB_AUTO_SYNC_BATCH_SERIES = int(os.getenv("TMDB_AUTO_SYNC_BATCH_SERIES", "5"))
-TMDB_AUTO_SYNC_COOLDOWN_MINUTES = int(os.getenv("TMDB_AUTO_SYNC_COOLDOWN_MINUTES", "60"))
 TMDB_AUTO_SYNC_IDLE_MINUTES = int(os.getenv("TMDB_AUTO_SYNC_IDLE_MINUTES", "30"))
 COLLECTIONS_AUTO_REFRESH = os.getenv("COLLECTIONS_AUTO_REFRESH", "1").strip().lower() not in {"0", "false", "no", "off"}
 COLLECTIONS_AUTO_REFRESH_MINUTES = int(os.getenv("COLLECTIONS_AUTO_REFRESH_MINUTES", "10"))
@@ -74,7 +73,7 @@ def _sync_tmdb_movies_blocking():
         return tmdb_sync_movies(
             limit=TMDB_AUTO_SYNC_BATCH_MOVIES,
             approved_only=True,
-            cooldown_minutes=TMDB_AUTO_SYNC_COOLDOWN_MINUTES,
+            cooldown_minutes=0,
             db=db,
         )
     finally:
@@ -86,7 +85,7 @@ def _sync_tmdb_series_blocking():
         return tmdb_sync_series(
             limit=TMDB_AUTO_SYNC_BATCH_SERIES,
             approved_only=True,
-            cooldown_minutes=TMDB_AUTO_SYNC_COOLDOWN_MINUTES,
+            cooldown_minutes=0,
             db=db,
         )
     finally:
@@ -138,11 +137,10 @@ async def _start_tmdb_auto_sync():
     idle_s = max(interval_s, TMDB_AUTO_SYNC_IDLE_MINUTES * 60)
 
     log.info(
-        "TMDB auto-sync: enabled (every %s min, batch movies=%s, batch series=%s, cooldown=%s min)",
+        "TMDB auto-sync: enabled (every %s min, batch movies=%s, batch series=%s)",
         TMDB_AUTO_SYNC_MINUTES,
         TMDB_AUTO_SYNC_BATCH_MOVIES,
         TMDB_AUTO_SYNC_BATCH_SERIES,
-        TMDB_AUTO_SYNC_COOLDOWN_MINUTES,
     )
 
     async def loop():

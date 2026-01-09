@@ -1,4 +1,6 @@
 import re
+import asyncio
+import random
 import time
 import threading
 from datetime import date, timedelta
@@ -117,6 +119,163 @@ class RateLimiter:
             if now < self._next:
                 time.sleep(self._next - now)
             self._next = max(now, self._next) + self.min_interval
+
+
+class TokenBucketRateLimiter:
+    def __init__(self, rps: int = 5, burst: int = 10):
+        self.rps = max(1, int(rps))
+        self.capacity = max(1, int(burst))
+        self.tokens = float(self.capacity)
+        self.updated_at = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    def _refill(self, now: float) -> None:
+        elapsed = max(0.0, now - self.updated_at)
+        if elapsed <= 0:
+            return
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.rps)
+        self.updated_at = now
+
+    async def acquire(self) -> None:
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                self._refill(now)
+                if self.tokens >= 1.0:
+                    self.tokens -= 1.0
+                    return
+                needed = (1.0 - self.tokens) / float(self.rps)
+            await asyncio.sleep(needed)
+
+
+class TmdbRequestError(Exception):
+    def __init__(self, message: str, *, status_code: int | None = None, kind: str = "unknown"):
+        super().__init__(message)
+        self.status_code = status_code
+        self.kind = kind
+
+
+def _jitter(max_jitter_s: float = 1.5) -> float:
+    return random.uniform(0.0, max_jitter_s)
+
+
+def _retry_sleep(base_s: float, *, max_s: float) -> float:
+    return min(max_s, base_s) + _jitter()
+
+
+class TmdbAsyncClient:
+    def __init__(
+        self,
+        *,
+        token: Optional[str],
+        api_key: Optional[str],
+        rps: int = 5,
+        burst: int = 10,
+        timeout: float = 20.0,
+        metrics: Optional[Any] = None,
+    ):
+        self.token = token
+        self.api_key = api_key
+        self._limiter = TokenBucketRateLimiter(rps=rps, burst=burst)
+        self._client = httpx.AsyncClient(timeout=timeout)
+        self._metrics = metrics
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def get_json(
+        self,
+        path: str,
+        *,
+        params: Optional[dict] = None,
+        max_retries: int = 5,
+    ) -> dict[str, Any]:
+        params = dict(params or {})
+        headers = {}
+
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        elif self.api_key:
+            params["api_key"] = self.api_key
+
+        url = f"{TMDB_BASE}{path}"
+        backoff_429 = 1.0
+        backoff_5xx = 0.5
+
+        for attempt in range(max_retries):
+            await self._limiter.acquire()
+            try:
+                if self._metrics is not None:
+                    self._metrics.record_request()
+                r = await self._client.get(url, params=params, headers=headers)
+            except httpx.TimeoutException as exc:
+                sleep_s = _retry_sleep(backoff_5xx, max_s=10.0)
+                backoff_5xx = min(10.0, backoff_5xx * 2)
+                if attempt == max_retries - 1:
+                    raise TmdbRequestError("TMDB timeout", kind="timeout") from exc
+                if self._metrics is not None:
+                    self._metrics.record_retry("timeout")
+                await asyncio.sleep(sleep_s)
+                continue
+            except httpx.RequestError as exc:
+                sleep_s = _retry_sleep(backoff_5xx, max_s=10.0)
+                backoff_5xx = min(10.0, backoff_5xx * 2)
+                if attempt == max_retries - 1:
+                    raise TmdbRequestError("No se pudo conectar con TMDB.", kind="network") from exc
+                if self._metrics is not None:
+                    self._metrics.record_retry("network")
+                await asyncio.sleep(sleep_s)
+                continue
+
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After")
+                base_sleep = float(retry_after) if retry_after and retry_after.isdigit() else backoff_429
+                backoff_429 = min(30.0, backoff_429 * 2)
+                sleep_s = _retry_sleep(base_sleep, max_s=30.0)
+                if attempt == max_retries - 1:
+                    raise TmdbRequestError("TMDB alcanzó el límite de solicitudes.", status_code=429, kind="rate_limited")
+                if self._metrics is not None:
+                    self._metrics.record_retry("rate_limited")
+                await asyncio.sleep(sleep_s)
+                continue
+
+            if 500 <= r.status_code <= 599:
+                sleep_s = _retry_sleep(backoff_5xx, max_s=10.0)
+                backoff_5xx = min(10.0, backoff_5xx * 2)
+                if attempt == max_retries - 1:
+                    raise TmdbRequestError("TMDB tuvo un error interno.", status_code=r.status_code, kind="server")
+                if self._metrics is not None:
+                    self._metrics.record_retry("server")
+                await asyncio.sleep(sleep_s)
+                continue
+
+            if r.is_error:
+                status = r.status_code
+                kind = "invalid"
+                if status == 401:
+                    kind = "auth"
+                elif status == 404:
+                    kind = "not_found"
+                elif status == 400:
+                    kind = "invalid"
+                raise TmdbRequestError(r.text, status_code=status, kind=kind)
+
+            return r.json()
+
+        raise TmdbRequestError("TMDB alcanzó el límite de solicitudes.", status_code=429, kind="rate_limited")
+
+    async def get_configuration(self) -> dict[str, Any]:
+        now = time.time()
+        async with _config_lock:
+            cached = _config_cache.get("payload")
+            expires_at = _config_cache.get("expires_at", 0.0)
+            if cached and now < expires_at:
+                return cached
+
+            payload = await self.get_json("/configuration")
+            _config_cache["payload"] = payload
+            _config_cache["expires_at"] = now + CONFIG_CACHE_TTL_S
+            return payload
 
 def _clean_title_and_year(s: str) -> Tuple[str, Optional[int]]:
     s = (s or "").strip()
@@ -342,6 +501,38 @@ def tmdb_get_json(
 
     raise _tmdb_error(429, "TMDB alcanzó el límite de solicitudes. Intenta más tarde.")
 
+async def _find_and_fetch_movie_async(
+    title: str,
+    *,
+    token: Optional[str],
+    api_key: Optional[str],
+    language: str = "en-US",
+    region: str = "US",
+    rps: int = 5,
+    burst: int = 10,
+) -> tuple[Optional[dict], Optional[dict]]:
+    wanted, year = _clean_title_and_year(title)
+
+    client = TmdbAsyncClient(token=token, api_key=api_key, rps=rps, burst=burst)
+    try:
+        search = await client.get_json(
+            "/search/movie",
+            params={"query": wanted, "language": language, "region": region, **({"year": year} if year else {})},
+        )
+        best = _pick_best_result(search.get("results") or [], wanted, year, "release_date")
+        if not best:
+            return None, None
+
+        mid = best.get("id")
+        details = await client.get_json(
+            f"/movie/{mid}",
+            params={"language": language, "append_to_response": "credits,videos,images,release_dates"},
+        )
+        return best, details
+    finally:
+        await client.close()
+
+
 def find_and_fetch_movie(
     title: str,
     *,
@@ -350,27 +541,51 @@ def find_and_fetch_movie(
     language: str = "en-US",
     region: str = "US",
     rps: int = 5,
+    burst: int = 10,
+) -> tuple[Optional[dict], Optional[dict]]:
+    return asyncio.run(
+        _find_and_fetch_movie_async(
+            title,
+            token=token,
+            api_key=api_key,
+            language=language,
+            region=region,
+            rps=rps,
+            burst=burst,
+        )
+    )
+
+async def _find_and_fetch_tv_async(
+    title: str,
+    *,
+    token: Optional[str],
+    api_key: Optional[str],
+    language: str = "en-US",
+    region: str = "US",
+    rps: int = 5,
+    burst: int = 10,
 ) -> tuple[Optional[dict], Optional[dict]]:
     wanted, year = _clean_title_and_year(title)
 
-    limiter = RateLimiter(rps=rps)
-    with httpx.Client(timeout=20) as client:
-        search = tmdb_get_json(
-            client, limiter, "/search/movie",
-            token=token, api_key=api_key,
-            params={"query": wanted, "language": language, "region": region, **({"year": year} if year else {})},
+    client = TmdbAsyncClient(token=token, api_key=api_key, rps=rps, burst=burst)
+    try:
+        search = await client.get_json(
+            "/search/tv",
+            params={"query": wanted, "language": language, **({"first_air_date_year": year} if year else {})},
         )
-        best = _pick_best_result(search.get("results") or [], wanted, year, "release_date")
+        best = _pick_best_result(search.get("results") or [], wanted, year, "first_air_date")
         if not best:
             return None, None
 
-        mid = best.get("id")
-        details = tmdb_get_json(
-            client, limiter, f"/movie/{mid}",
-            token=token, api_key=api_key,
-            params={"language": language, "append_to_response": "credits,videos"},
+        tid = best.get("id")
+        details = await client.get_json(
+            f"/tv/{tid}",
+            params={"language": language, "append_to_response": "credits,videos,images,content_ratings"},
         )
         return best, details
+    finally:
+        await client.close()
+
 
 def find_and_fetch_tv(
     title: str,
@@ -380,27 +595,19 @@ def find_and_fetch_tv(
     language: str = "en-US",
     region: str = "US",
     rps: int = 5,
+    burst: int = 10,
 ) -> tuple[Optional[dict], Optional[dict]]:
-    wanted, year = _clean_title_and_year(title)
-
-    limiter = RateLimiter(rps=rps)
-    with httpx.Client(timeout=20) as client:
-        search = tmdb_get_json(
-            client, limiter, "/search/tv",
-            token=token, api_key=api_key,
-            params={"query": wanted, "language": language, **({"first_air_date_year": year} if year else {})},
+    return asyncio.run(
+        _find_and_fetch_tv_async(
+            title,
+            token=token,
+            api_key=api_key,
+            language=language,
+            region=region,
+            rps=rps,
+            burst=burst,
         )
-        best = _pick_best_result(search.get("results") or [], wanted, year, "first_air_date")
-        if not best:
-            return None, None
-
-        tid = best.get("id")
-        details = tmdb_get_json(
-            client, limiter, f"/tv/{tid}",
-            token=token, api_key=api_key,
-            params={"language": language, "append_to_response": "credits,videos"},
-        )
-        return best, details
+    )
 
 def fetch_trending(
     kind: str,
@@ -509,3 +716,6 @@ def fetch_discover(
             api_key=api_key,
             params=params,
         )
+CONFIG_CACHE_TTL_S = 60 * 60 * 24
+_config_cache: dict[str, Any] = {"payload": None, "expires_at": 0.0}
+_config_lock = asyncio.Lock()
