@@ -82,8 +82,8 @@ fun FullscreenInfoBar(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xE607162E),
-                        Color(0xB30E2A56)
+                        Color(0xFF07162E),
+                        Color(0xFF0E2A56)
                     )
                 )
             )
