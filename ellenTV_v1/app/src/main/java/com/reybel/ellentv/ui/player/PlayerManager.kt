@@ -454,7 +454,7 @@ class PlayerManager(context: Context) {
         if (p.mediaItemCount == 0) return false
 
         liveStallRecoveryAttempts++
-        val target = (p.currentPosition - 1500L).coerceAtLeast(0L)
+        val target = (p.currentPosition - 400L).coerceAtLeast(0L) // Minimizar retroceso visible
         val wasPlaying = p.isPlaying
 
         Log.w(
