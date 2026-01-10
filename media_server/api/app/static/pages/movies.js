@@ -93,10 +93,6 @@ function posterBox(url, { rounded="rounded-xl" } = {}) {
   });
 }
 
-function approvalPill(v) {
-  return v ? badge("APPROVED", "green") : badge("PENDING", "zinc");
-}
-
 function normalizeTmdbStatus(status) {
   return typeof status === "string" ? status.trim().toLowerCase() : "";
 }
@@ -115,7 +111,6 @@ function movieMainTitle(x) {
 function openMovieEditModal(item, onSaved) {
   let draftNorm = item.normalized_name || "";
   let draftPoster = item.custom_poster_url || "";
-  let draftApproved = !!item.approved;
 
   const msg = el("div", { class:"text-xs text-zinc-500" }, "");
   const posterUrl = item.custom_poster_url || tmdbImg(item.tmdb_poster_path, "w500") || item.poster;
@@ -135,19 +130,6 @@ function openMovieEditModal(item, onSaved) {
     oninput: (e) => { draftPoster = e.target.value; }
   });
 
-  const approvedToggle = el("button", {
-    class: `px-3 py-2 rounded-xl text-sm transition border ${
-      draftApproved ? "bg-emerald-500/15 border-emerald-400/20 text-emerald-200" : "bg-white/5 border-white/10 text-zinc-200"
-    }`,
-    onclick: () => {
-      draftApproved = !draftApproved;
-      approvedToggle.className = `px-3 py-2 rounded-xl text-sm transition border ${
-        draftApproved ? "bg-emerald-500/15 border-emerald-400/20 text-emerald-200" : "bg-white/5 border-white/10 text-zinc-200"
-      }`;
-      approvedToggle.textContent = draftApproved ? "Approved" : "Pending";
-    }
-  }, draftApproved ? "Approved" : "Pending");
-
   const body = el("div", { class:"flex flex-col md:flex-row gap-5" }, [
     el("div", { class:"shrink-0" }, poster),
     el("div", { class:"flex-1 space-y-4" }, [
@@ -163,11 +145,6 @@ function openMovieEditModal(item, onSaved) {
           posterInput,
           el("div", { class:"text-[11px] text-zinc-500 mt-1" }, "Si lo dejas vacío, usa el poster del provider / TMDB."),
         ]),
-      ]),
-      el("div", { class:"flex items-center gap-2" }, [
-        el("div", { class:"text-xs text-zinc-400" }, "Approval"),
-        approvedToggle,
-        approvalPill(!!item.approved),
       ]),
       msg,
     ])
@@ -185,7 +162,6 @@ function openMovieEditModal(item, onSaved) {
             await api.vod.patch(item.id, {
               normalized_name: (draftNorm || "").trim() || null,
               custom_poster_url: (draftPoster || "").trim() || null,
-              approved: draftApproved,
             });
             await onSaved?.();
             m.close();
@@ -205,7 +181,6 @@ export function MoviesPage(appState) {
   let q = appState.movies?.q || "";
   let limit = appState.movies?.limit || 60;
   let offset = appState.movies?.offset || 0;
-  let approved = (appState.movies && "approved" in appState.movies) ? appState.movies.approved : null;
   let synced = (appState.movies && "synced" in appState.movies) ? appState.movies.synced : null;
 
 
@@ -220,9 +195,6 @@ export function MoviesPage(appState) {
       synced = null; appState.movies.synced = null;
     }
 
-    if (restored.approved === true || restored.approved === false || restored.approved === null) {
-      approved = restored.approved; appState.movies.approved = restored.approved;
-    }
     if (Number.isFinite(restored.offset)) { offset = restored.offset; appState.movies.offset = restored.offset; }
     restoreScrollTop = Number.isFinite(restored.scrollTop) ? restored.scrollTop : 0;
   }
@@ -249,7 +221,7 @@ export function MoviesPage(appState) {
     status.textContent = "Cargando…";
     renderSkeletonGrid(gridWrap, Math.min(limit, 24));
 
-    const data = await api.vod.listAll({ q, limit, offset, approved, synced });
+    const data = await api.vod.listAll({ q, limit, offset, synced });
 
     status.textContent = `Mostrando ${data.items.length} de ${data.total}`;
 
@@ -270,9 +242,9 @@ export function MoviesPage(appState) {
         class:"hz-glass rounded-2xl overflow-hidden border border-white/10 hover:bg-white/5 transition cursor-pointer",
         tabindex: "0", // ✅ focus (TV-style)
         onmouseenter: () => prefetchMovie(appState, item.id), // ✅ prefetch desktop
-        onfocus: () => prefetchMovie(appState, item.id),      // ✅ prefetch TV
-        onclick: () => {
-          writeGridState(MOVIES_GRID_KEY, { approved, synced, offset, scrollTop });
+          onfocus: () => prefetchMovie(appState, item.id),      // ✅ prefetch TV
+          onclick: () => {
+          writeGridState(MOVIES_GRID_KEY, { synced, offset, scrollTop });
           go(`/movies/${item.id}`);
         },
       });
@@ -302,7 +274,6 @@ export function MoviesPage(appState) {
         el("div", { class:"text-sm font-medium text-zinc-100" }, movieMainTitle(item)),
         el("div", { class:"text-[11px] text-zinc-500 mt-1 truncate" }, item.provider_name || ""),
         el("div", { class:"mt-2 flex flex-wrap gap-2" }, [
-  approvalPill(!!item.approved),
   (item.poster ? badge("POSTER", "amber") : badge("NO POSTER", "zinc")),
   tmdbStatusBadge,
 ].filter(Boolean))
@@ -345,39 +316,6 @@ export function MoviesPage(appState) {
 
 function renderFilters() {
   filterBar.innerHTML = "";
-
-  filterBar.appendChild(button("All", {
-    tone: approved === null ? "blue" : "zinc",
-    small:true,
-    onClick: () => {
-      approved = null; appState.movies.approved = null;
-      offset = 0; appState.movies.offset = 0;
-      renderFilters();
-      reload();
-    }
-  }));
-
-  filterBar.appendChild(button("Approved", {
-    tone: approved === true ? "blue" : "zinc",
-    small:true,
-    onClick: () => {
-      approved = true; appState.movies.approved = true;
-      offset = 0; appState.movies.offset = 0;
-      renderFilters();
-      reload();
-    }
-  }));
-
-  filterBar.appendChild(button("Pending", {
-    tone: approved === false ? "blue" : "zinc",
-    small:true,
-    onClick: () => {
-      approved = false; appState.movies.approved = false;
-      offset = 0; appState.movies.offset = 0;
-      renderFilters();
-      reload();
-    }
-  }));
 
   filterBar.appendChild(button("Synced", {
     tone: synced === true ? "blue" : "zinc",
@@ -514,8 +452,6 @@ export function MovieDetailPage(appState, movieId) {
             ]),
           ]),
            el("div", { class:"flex items-center gap-2 shrink-0" }, [
-                approvalPill(!!m.approved),
-
                 button("Play", { tone:"blue", onClick: async () => {
                   status.textContent = "Generando URL…";
                   try {

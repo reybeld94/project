@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -256,11 +256,12 @@ def _augment_payload_with_catalog(payload: dict, db: Session) -> dict:
     if not tmdb_ids:
         return payload
 
+    tmdb_synced_values = ["synced", "sync"]
     rows = db.execute(
         select(VodStream, Provider)
         .join(Provider, Provider.id == VodStream.provider_id)
         .where(VodStream.tmdb_id.in_(tmdb_ids))
-        .where(VodStream.approved == True)
+        .where(func.lower(VodStream.tmdb_status).in_(tmdb_synced_values))
         .where(VodStream.is_active == True)
     ).all()
 

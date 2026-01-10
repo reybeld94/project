@@ -7,8 +7,8 @@ import { SettingsPage } from "./pages/settings.js";
 
 const appState = {
   live: { q:"", limit:50, offset:0, providerId:null, approved:null },
-  movies: { q:"", limit:60, offset:0, approved:null },
-  series: { q:"", limit:60, offset:0, approved:null },
+  movies: { q:"", limit:60, offset:0 },
+  series: { q:"", limit:60, offset:0 },
 
   moviesCache: new Map(),
   seriesCache: new Map(),

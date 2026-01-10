@@ -91,14 +91,9 @@ function coverBox(url, { rounded="rounded-xl" } = {}) {
   });
 }
 
-function approvalPill(v) {
-  return v ? badge("APPROVED", "green") : badge("PENDING", "zinc");
-}
-
 function openSeriesEditModal(item, onSaved) {
   let draftNorm = item.normalized_name || "";
   let draftCover = item.custom_cover_url || "";
-  let draftApproved = !!item.approved;
 
   const msg = el("div", { class:"text-xs text-zinc-500" }, "");
   const coverUrl = item.custom_cover_url || tmdbImg(item.tmdb_poster_path, "w500") || item.cover;
@@ -118,19 +113,6 @@ function openSeriesEditModal(item, onSaved) {
     oninput: (e) => { draftCover = e.target.value; }
   });
 
-  const approvedToggle = el("button", {
-    class: `px-3 py-2 rounded-xl text-sm transition border ${
-      draftApproved ? "bg-emerald-500/15 border-emerald-400/20 text-emerald-200" : "bg-white/5 border-white/10 text-zinc-200"
-    }`,
-    onclick: () => {
-      draftApproved = !draftApproved;
-      approvedToggle.className = `px-3 py-2 rounded-xl text-sm transition border ${
-        draftApproved ? "bg-emerald-500/15 border-emerald-400/20 text-emerald-200" : "bg-white/5 border-white/10 text-zinc-200"
-      }`;
-      approvedToggle.textContent = draftApproved ? "Approved" : "Pending";
-    }
-  }, draftApproved ? "Approved" : "Pending");
-
   const body = el("div", { class:"flex flex-col md:flex-row gap-5" }, [
     el("div", { class:"shrink-0" }, cover),
     el("div", { class:"flex-1 space-y-4" }, [
@@ -146,11 +128,6 @@ function openSeriesEditModal(item, onSaved) {
           coverInput,
           el("div", { class:"text-[11px] text-zinc-500 mt-1" }, "Si lo dejas vacío, usa el cover del provider / TMDB."),
         ]),
-      ]),
-      el("div", { class:"flex items-center gap-2" }, [
-        el("div", { class:"text-xs text-zinc-400" }, "Approval"),
-        approvedToggle,
-        approvalPill(!!item.approved),
       ]),
       msg,
     ])
@@ -168,7 +145,6 @@ function openSeriesEditModal(item, onSaved) {
             await api.series.patch(item.id, {
               normalized_name: (draftNorm || "").trim() || null,
               custom_cover_url: (draftCover || "").trim() || null,
-              approved: draftApproved,
             });
             await onSaved?.();
             m.close();
@@ -186,16 +162,12 @@ export function SeriesPage(appState) {
   let q = appState.series?.q || "";
   let limit = appState.series?.limit || 60;
   let offset = appState.series?.offset || 0;
-  let approved = (appState.series && "approved" in appState.series) ? appState.series.approved : null;
 
   let scrollTop = 0;
   let restoreScrollTop = null;
   const restored = readGridState(SERIES_GRID_KEY);
   if (restored) {
     if (typeof restored.q === "string") { q = restored.q; appState.series.q = restored.q; }
-    if (restored.approved === true || restored.approved === false || restored.approved === null) {
-      approved = restored.approved; appState.series.approved = restored.approved;
-    }
     if (Number.isFinite(restored.offset)) { offset = restored.offset; appState.series.offset = restored.offset; }
     restoreScrollTop = Number.isFinite(restored.scrollTop) ? restored.scrollTop : 0;
   }
@@ -212,7 +184,7 @@ export function SeriesPage(appState) {
 
     status.textContent = "Cargando…";
     renderSkeletonGrid(gridWrap, Math.min(limit, 24));
-    const data = await api.series.listAll({ q, limit, offset, approved });
+    const data = await api.series.listAll({ q, limit, offset });
     status.textContent = `Mostrando ${data.items.length} de ${data.total}`;
 
     gridWrap.innerHTML = "";
@@ -234,7 +206,7 @@ export function SeriesPage(appState) {
         onmouseenter: () => prefetchSeries(appState, item.id),
         onfocus: () => prefetchSeries(appState, item.id),
         onclick: () => {
-          writeGridState(SERIES_GRID_KEY, { q, approved, offset, scrollTop });
+          writeGridState(SERIES_GRID_KEY, { q, offset, scrollTop });
           go(`/series/${item.id}`);
         },
       });
@@ -254,7 +226,6 @@ export function SeriesPage(appState) {
         el("div", { class:"text-sm font-medium text-zinc-100" }, item.normalized_name || item.name || "—"),
         el("div", { class:"text-[11px] text-zinc-500 mt-1 truncate" }, item.provider_name || ""),
         el("div", { class:"mt-2 flex flex-wrap gap-2" }, [
-          approvalPill(!!item.approved),
           (item.cover ? badge("COVER", "amber") : badge("NO COVER", "zinc")),
         ])
       ]);
@@ -291,17 +262,7 @@ export function SeriesPage(appState) {
     );
   }
 
-  const filterBar = el("div", { class:"inline-flex gap-2" }, [
-    button("All", { tone: approved === null ? "blue" : "zinc", small:true, onClick: () => {
-      approved = null; appState.series.approved = null; offset = 0; appState.series.offset = 0; reload();
-    }}),
-    button("Approved", { tone: approved === true ? "blue" : "zinc", small:true, onClick: () => {
-      approved = true; appState.series.approved = true; offset = 0; appState.series.offset = 0; reload();
-    }}),
-    button("Pending", { tone: approved === false ? "blue" : "zinc", small:true, onClick: () => {
-      approved = false; appState.series.approved = false; offset = 0; appState.series.offset = 0; reload();
-    }}),
-  ]);
+  const filterBar = el("div", { class:"inline-flex gap-2" });
 
   const topRight = el("div", { class:"w-[560px] max-w-full flex flex-col items-end gap-2" }, [
     el("div", { class:"w-full flex items-center gap-2" }, [
@@ -417,8 +378,6 @@ export function SeriesDetailPage(appState, seriesId) {
                 ]),
               ]),
                             el("div", { class:"flex items-center gap-2 shrink-0" }, [
-                approvalPill(!!s.approved),
-
                 button("Play (first ep)", { tone:"blue", onClick: async () => {
                   status.textContent = "Buscando episodio…";
                   try {

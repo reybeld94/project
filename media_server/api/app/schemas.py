@@ -88,12 +88,10 @@ class EpgSourceOut(BaseModel):
         from_attributes = True
 
 class VodStreamUpdate(BaseModel):
-    approved: Optional[bool] = None
     normalized_name: Optional[str] = None
     custom_poster_url: Optional[str] = None
 
 class SeriesItemUpdate(BaseModel):
-    approved: bool | None = None
     normalized_name: str | None = None
     custom_cover_url: str | None = None
 

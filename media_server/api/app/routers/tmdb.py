@@ -222,7 +222,7 @@ def tmdb_genres(kind: str = "movie", db: Session = Depends(get_db)):
 
 
 @router.post("/sync/movies")
-def sync_movies(limit: int = 20, approved_only: bool = True, cooldown_minutes: int = 0, db: Session = Depends(get_db)):
+def sync_movies(limit: int = 20, cooldown_minutes: int = 0, db: Session = Depends(get_db)):
     cfg = get_or_create_cfg(db)
     if not cfg.is_enabled:
         raise HTTPException(status_code=400, detail="TMDB is disabled in settings")
@@ -235,17 +235,15 @@ def sync_movies(limit: int = 20, approved_only: bool = True, cooldown_minutes: i
     result = run_tmdb_sync(
         kind="movie",
         limit=max(1, min(limit, 200)),
-        approved_only=approved_only,
         cfg=cfg,
         db=db,
         cooldown_override_minutes=cooldown_minutes if cooldown_minutes > 0 else None,
     )
-    result["approved_only"] = approved_only
     result["cooldown_minutes_override"] = cooldown_minutes if cooldown_minutes > 0 else None
     return result
 
 @router.post("/sync/series")
-def sync_series(limit: int = 20, approved_only: bool = True, cooldown_minutes: int = 0, db: Session = Depends(get_db)):
+def sync_series(limit: int = 20, cooldown_minutes: int = 0, db: Session = Depends(get_db)):
     cfg = get_or_create_cfg(db)
     if not cfg.is_enabled:
         raise HTTPException(status_code=400, detail="TMDB is disabled in settings")
@@ -258,18 +256,16 @@ def sync_series(limit: int = 20, approved_only: bool = True, cooldown_minutes: i
     result = run_tmdb_sync(
         kind="series",
         limit=max(1, min(limit, 200)),
-        approved_only=approved_only,
         cfg=cfg,
         db=db,
         cooldown_override_minutes=cooldown_minutes if cooldown_minutes > 0 else None,
     )
-    result["approved_only"] = approved_only
     result["cooldown_minutes_override"] = cooldown_minutes if cooldown_minutes > 0 else None
     return result
 
 
 @router.post("/sync/now")
-def sync_now(limit: int = 100, approved_only: bool = True, db: Session = Depends(get_db)):
+def sync_now(limit: int = 100, db: Session = Depends(get_db)):
     cfg = get_or_create_cfg(db)
     if not cfg.is_enabled:
         raise HTTPException(status_code=400, detail="TMDB is disabled in settings")
@@ -279,4 +275,4 @@ def sync_now(limit: int = 100, approved_only: bool = True, db: Session = Depends
     if not token and not api_key:
         raise HTTPException(status_code=400, detail="Missing TMDB credentials (token or api_key)")
 
-    return run_tmdb_sync_now(limit=max(1, min(limit, 500)), approved_only=approved_only, cfg=cfg, db=db)
+    return run_tmdb_sync_now(limit=max(1, min(limit, 500)), cfg=cfg, db=db)
