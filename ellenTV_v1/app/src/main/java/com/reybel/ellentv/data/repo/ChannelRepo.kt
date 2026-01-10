@@ -3,6 +3,7 @@ package com.reybel.ellentv.data.repo
 import com.reybel.ellentv.data.api.ApiClient
 import com.reybel.ellentv.data.api.ApiService
 import com.reybel.ellentv.data.api.LiveItem
+import com.reybel.ellentv.data.api.PlayResponse
 
 class ChannelRepo {
 
@@ -19,8 +20,12 @@ class ChannelRepo {
         return api.getLive(providerId = providerId, approved = true, activeOnly = true, limit = 100, offset = 0).items
     }
 
+    suspend fun fetchPlayInfo(liveId: String): PlayResponse {
+        return api.getPlayUrl(liveId = liveId, format = "m3u8")
+    }
+
     suspend fun fetchPlayUrl(liveId: String): String {
-        return api.getPlayUrl(liveId = liveId, format = "m3u8").url
+        return fetchPlayInfo(liveId).url
     }
     suspend fun fetchEpgGrid(
         providerId: String,

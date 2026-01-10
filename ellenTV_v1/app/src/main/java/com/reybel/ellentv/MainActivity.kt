@@ -564,9 +564,16 @@ fun TvHomeScreen(
                 if (!chosenId.isNullOrBlank()) {
                     bootProgress = 0.92f
                     bootTitle = "Almost ready…"
-                    streamUrl = withContext(Dispatchers.IO) { repo.fetchPlayUrl(chosenId) }
+                    val playInfo = withContext(Dispatchers.IO) { repo.fetchPlayInfo(chosenId) }
+                    streamUrl = playInfo.url
+                    streamAlt1 = playInfo.alt1.orEmpty()
+                    streamAlt2 = playInfo.alt2.orEmpty()
+                    streamAlt3 = playInfo.alt3.orEmpty()
                 } else {
                     streamUrl = ""
+                    streamAlt1 = ""
+                    streamAlt2 = ""
+                    streamAlt3 = ""
                 }
 
                 persistGuideSnapshot(mergedGrid)
@@ -726,7 +733,11 @@ fun TvHomeScreen(
 
                             scope.launch {
                                 try {
-                                    streamUrl = repo.fetchPlayUrl(liveId)
+                                    val playInfo = repo.fetchPlayInfo(liveId)
+                                    streamUrl = playInfo.url
+                                    streamAlt1 = playInfo.alt1.orEmpty()
+                                    streamAlt2 = playInfo.alt2.orEmpty()
+                                    streamAlt3 = playInfo.alt3.orEmpty()
                                     error = null
                                 } catch (e: Exception) {
                                     error = e.message ?: "Error al abrir canal"

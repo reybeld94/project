@@ -39,7 +39,10 @@ data class LiveItem(
 data class PlayResponse(
     val id: String,
     val name: String,
-    val url: String
+    val url: String,
+    @Json(name = "alt1") val alt1: String? = null,
+    @Json(name = "alt2") val alt2: String? = null,
+    @Json(name = "alt3") val alt3: String? = null
 )
 
 data class CollectionOut(
