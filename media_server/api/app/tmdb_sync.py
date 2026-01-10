@@ -382,8 +382,7 @@ async def _sync_one_task(
     except TmdbRequestError as exc:
         if item is None:
             return
-        if db.in_transaction():
-            db.rollback()
+        db.rollback()
         with db.begin():
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
@@ -394,8 +393,7 @@ async def _sync_one_task(
     except Exception as exc:
         if item is None:
             return
-        if db.in_transaction():
-            db.rollback()
+        db.rollback()
         with db.begin():
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
