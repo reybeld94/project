@@ -183,6 +183,23 @@ def get_live_play_url(
     url = f"{p.base_url.rstrip('/')}/live/{p.username}/{p.password}/{target.provider_stream_id}.{fmt}"
 
     out = {"id": str(target.id), "name": target.name, "url": url}
+    if not alt_label:
+        for n in (1, 2, 3):
+            alt_id = getattr(s, f"alt{n}_stream_id")
+            if not alt_id:
+                continue
+            alt_stream = db.get(LiveStream, str(alt_id))
+            if not alt_stream:
+                continue
+            alt_provider = db.get(Provider, alt_stream.provider_id)
+            if not alt_provider:
+                continue
+            alt_url = (
+                f"{alt_provider.base_url.rstrip('/')}/live/"
+                f"{alt_provider.username}/{alt_provider.password}/"
+                f"{alt_stream.provider_stream_id}.{fmt}"
+            )
+            out[f"alt{n}"] = alt_url
     if alt_label:
         out["alt"] = alt_label
         out["base_id"] = str(s.id)  # el canal original (main)
