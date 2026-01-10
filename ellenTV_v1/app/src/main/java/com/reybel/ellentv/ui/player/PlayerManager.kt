@@ -473,13 +473,17 @@ class PlayerManager(context: Context) {
 
         if (currentPosition == lastPosition && currentPosition > 0) {
             positionStuckCount++
-            Log.w("ELLENTV_HEALTH", "Position stuck: $positionStuckCount/3")
+            Log.w("ELLENTV_HEALTH", "Position stuck: $positionStuckCount/5")
 
-            if (positionStuckCount >= 3) {
+            if (positionStuckCount >= 5) {
                 Log.e("ELLENTV_HEALTH", "Stream frozen! Reconnecting...")
                 onHealthIssue?.invoke("Stream congelado")
                 positionStuckCount = 0
-                attemptReconnect()
+                if (player.playbackState == Player.STATE_BUFFERING) {
+                    attemptReconnect()
+                } else {
+                    Log.w("ELLENTV_HEALTH", "Skipping reconnect; player not buffering")
+                }
             }
         } else {
             positionStuckCount = 0
@@ -487,13 +491,17 @@ class PlayerManager(context: Context) {
 
         if (currentBitrate == 0L && player.isPlaying) {
             zeroBitrateCount++
-            Log.w("ELLENTV_HEALTH", "Zero bitrate: $zeroBitrateCount/4")
+            Log.w("ELLENTV_HEALTH", "Zero bitrate: $zeroBitrateCount/6")
 
-            if (zeroBitrateCount >= 4) {
+            if (zeroBitrateCount >= 6) {
                 Log.e("ELLENTV_HEALTH", "No data! Reconnecting...")
                 onHealthIssue?.invoke("Sin datos del servidor")
                 zeroBitrateCount = 0
-                attemptReconnect()
+                if (player.playbackState == Player.STATE_BUFFERING) {
+                    attemptReconnect()
+                } else {
+                    Log.w("ELLENTV_HEALTH", "Skipping reconnect; player not buffering")
+                }
             }
         } else {
             zeroBitrateCount = 0
