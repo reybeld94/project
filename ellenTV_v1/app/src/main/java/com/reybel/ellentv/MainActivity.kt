@@ -34,6 +34,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import com.reybel.ellentv.ui.home.InfoPanel
+import com.reybel.ellentv.ui.home.FullscreenInfoBar
 
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -192,6 +193,8 @@ fun TvHomeScreen(
     var streamAlt2 by remember { mutableStateOf("") }
     var streamAlt3 by remember { mutableStateOf("") }
     var isFullscreen by remember { mutableStateOf(false) }
+    var fullscreenInfoVisible by remember { mutableStateOf(false) }
+    var fullscreenInfoJob by remember { mutableStateOf<Job?>(null) }
 
     val fullscreenFocus = remember { FocusRequester() }
 
@@ -207,6 +210,15 @@ fun TvHomeScreen(
         }
     }
 
+    fun showFullscreenInfoBar() {
+        fullscreenInfoJob?.cancel()
+        fullscreenInfoVisible = true
+        fullscreenInfoJob = scope.launch {
+            delay(5_000)
+            fullscreenInfoVisible = false
+        }
+    }
+
     val repo = remember { ChannelRepo() }
     fun sortChannels(items: List<LiveItem>): List<LiveItem> {
         return items.sortedWith { a, b ->
@@ -215,6 +227,42 @@ fun TvHomeScreen(
             val c = an.compareTo(bn)
             if (c != 0) c else a.name.compareTo(b.name, ignoreCase = true)
         }
+    }
+
+    fun tuneToChannel(liveId: String, showInfo: Boolean = false) {
+        if (liveId == selectedId) {
+            if (showInfo) showFullscreenInfoBar()
+            return
+        }
+
+        selectedId = liveId
+        browseLiveId = null
+        browseProgram = null
+        if (showInfo) showFullscreenInfoBar()
+
+        scope.launch {
+            try {
+                val playInfo = repo.fetchPlayInfo(liveId)
+                streamUrl = playInfo.url
+                streamAlt1 = playInfo.alt1.orEmpty()
+                streamAlt2 = playInfo.alt2.orEmpty()
+                streamAlt3 = playInfo.alt3.orEmpty()
+                error = null
+            } catch (e: Exception) {
+                error = e.message ?: "Error al abrir canal"
+                Log.e("ELLENTV_API", "fetchPlayUrl error: ${e.message}", e)
+            }
+        }
+
+        vm.selectChannel(liveId)
+    }
+
+    fun changeChannelByOffset(offset: Int) {
+        if (channels.isEmpty()) return
+        val currentIndex = channels.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 } ?: 0
+        val targetIndex = (currentIndex + offset).coerceIn(0, channels.lastIndex)
+        val targetId = channels[targetIndex].id
+        tuneToChannel(targetId, showInfo = true)
     }
 
     fun persistGuideSnapshot(grid: EpgGridResponse? = epgGrid) {
@@ -447,6 +495,13 @@ fun TvHomeScreen(
             if (!vodActiveFullscreen && lastLiveUrls.isNotEmpty()) {
                 playerManager.setStreamUrls(lastLiveUrls)
             }
+        }
+    }
+
+    LaunchedEffect(isFullscreen) {
+        if (!isFullscreen) {
+            fullscreenInfoJob?.cancel()
+            fullscreenInfoVisible = false
         }
     }
 
@@ -714,7 +769,7 @@ fun TvHomeScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    EpgSection(
+                        EpgSection(
                         error = error,
                         epgError = epgError,
                         epgGrid = epgGrid,
@@ -727,25 +782,7 @@ fun TvHomeScreen(
                                 return@EpgSection
                             }
 
-                            selectedId = liveId
-                            browseLiveId = null
-                            browseProgram = null
-
-                            scope.launch {
-                                try {
-                                    val playInfo = repo.fetchPlayInfo(liveId)
-                                    streamUrl = playInfo.url
-                                    streamAlt1 = playInfo.alt1.orEmpty()
-                                    streamAlt2 = playInfo.alt2.orEmpty()
-                                    streamAlt3 = playInfo.alt3.orEmpty()
-                                    error = null
-                                } catch (e: Exception) {
-                                    error = e.message ?: "Error al abrir canal"
-                                    Log.e("ELLENTV_API", "fetchPlayUrl error: ${e.message}", e)
-                                }
-                            }
-
-                            vm.selectChannel(liveId)
+                            tuneToChannel(liveId)
                         },
                         onHover = { liveId, program ->
                             setBrowseDebounced(liveId, program)
@@ -866,6 +903,7 @@ fun TvHomeScreen(
         if (isFullscreen) {
             BackHandler(enabled = true) {
                 isFullscreen = false
+                fullscreenInfoVisible = false
                 if (vodActiveFullscreen) {
                     vodActiveFullscreen = false
                     // 🔧 CRÍTICO: Solo restaurar Live TV si volvemos a la sección LIVE
@@ -894,6 +932,7 @@ fun TvHomeScreen(
                             android.view.KeyEvent.KEYCODE_BACK,
                             android.view.KeyEvent.KEYCODE_ESCAPE -> {
                                 isFullscreen = false
+                                fullscreenInfoVisible = false
                                 if (vodActiveFullscreen) {
                                     vodActiveFullscreen = false
                                     // 🔧 CRÍTICO: Solo restaurar Live TV si volvemos a la sección LIVE
@@ -902,6 +941,27 @@ fun TvHomeScreen(
                                     } else {
                                         playerManager.stop()
                                     }
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                            android.view.KeyEvent.KEYCODE_ENTER -> {
+                                if (section == AppSection.LIVE && !vodActiveFullscreen) {
+                                    showFullscreenInfoBar()
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+                            android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                if (section == AppSection.LIVE && !vodActiveFullscreen) {
+                                    changeChannelByOffset(1)
+                                }
+                                true
+                            }
+                            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (section == AppSection.LIVE && !vodActiveFullscreen) {
+                                    changeChannelByOffset(-1)
                                 }
                                 true
                             }
@@ -914,6 +974,20 @@ fun TvHomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 )
+
+                if (fullscreenInfoVisible && section == AppSection.LIVE && !vodActiveFullscreen) {
+                    FullscreenInfoBar(
+                        selectedId = selectedId,
+                        browseProgram = browseProgram,
+                        epgGrid = epgGrid,
+                        channels = channels,
+                        now = now,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(160.dp)
+                    )
+                }
             }
         }
     }
