@@ -75,6 +75,8 @@ class PlayerManager(context: Context) {
     private val _player = MutableStateFlow(createPlayer(BufferLevel.NORMAL))
     val playerFlow: StateFlow<ExoPlayer> = _player.asStateFlow()
 
+    private val DEFAULT_LIVE_BUFFER = BufferLevel.HIGH
+
     val player: ExoPlayer
         get() = _player.value
 
@@ -562,13 +564,13 @@ class PlayerManager(context: Context) {
         needsBufferUpgrade = false
         liveStallRecoveryAttempts = 0
 
-        if (bufferLevel != BufferLevel.NORMAL) {
-            bufferLevel = BufferLevel.NORMAL
-            onBufferLevelChanged?.invoke("Buffer: ${bufferLevel.label}")
-            recreatePlayerWithLevel(BufferLevel.NORMAL)
+        if (bufferLevel != DEFAULT_LIVE_BUFFER) {
+            bufferLevel = DEFAULT_LIVE_BUFFER
+            onBufferLevelChanged?.invoke("Buffer inicial LIVE: ${bufferLevel.label}")
+            recreatePlayerWithLevel(DEFAULT_LIVE_BUFFER)
         } else {
-            bufferLevel = BufferLevel.NORMAL
-            onBufferLevelChanged?.invoke("Buffer: ${bufferLevel.label}")
+            bufferLevel = DEFAULT_LIVE_BUFFER
+            onBufferLevelChanged?.invoke("Buffer inicial LIVE: ${bufferLevel.label}")
         }
 
         lastBufferedPos = 0L
