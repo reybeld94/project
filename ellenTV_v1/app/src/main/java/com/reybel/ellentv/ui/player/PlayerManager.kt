@@ -656,9 +656,9 @@ class PlayerManager(context: Context) {
             if (!isVodContent) {
                 mediaItemBuilder.setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.02f)
-                        .setMinPlaybackSpeed(0.98f)
-                        .setTargetOffsetMs(C.TIME_UNSET)
+                        .setMaxPlaybackSpeed(1.05f)
+                        .setMinPlaybackSpeed(0.95f)
+                        .setTargetOffsetMs(5_000L)
                         .build()
                 )
                 Log.d("ELLENTV_PLAYER", "Configured as LIVE stream")
