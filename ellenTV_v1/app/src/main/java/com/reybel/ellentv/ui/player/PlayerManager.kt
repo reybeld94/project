@@ -405,12 +405,15 @@ class PlayerManager(context: Context) {
         val coolDown = now - lastNoProgressReconnectAt
 
         // Para VOD: timeout más largo (el servidor puede tardar)
-        val STUCK_MS = if (isVodContent) 30_000L else 8_000L
-        val COOLDOWN_MS = 12_000L
+        val STUCK_MS = if (isVodContent) 30_000L else 20_000L
+        val COOLDOWN_MS = 20_000L
 
         if (stuckFor >= STUCK_MS && coolDown >= COOLDOWN_MS) {
             lastNoProgressReconnectAt = now
-            Log.e("ELLENTV_HEALTH", "Buffer not progressing for ${stuckFor}ms → reconnect")
+            Log.e(
+                "ELLENTV_HEALTH",
+                "Buffer not progressing for ${stuckFor}ms (threshold=${STUCK_MS}ms, cooldown=${COOLDOWN_MS}ms) → reconnect"
+            )
             onHealthIssue?.invoke("Buffer no progresa")
 
             if (!isVodContent) {
