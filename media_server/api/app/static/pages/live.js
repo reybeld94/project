@@ -849,6 +849,13 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
         const url = r?.url || "";
         if (!url) { status.textContent = "❌ No se pudo obtener el URL."; return; }
 
+        // Intentar abrir VLC local (PC) via protocol handler.
+        try {
+          window.location.href = `vlc://${url}`;
+        } catch (err) {
+          console.warn("No pude abrir VLC via protocol handler:", err);
+        }
+
         const ok = await copyToClipboard(url);
         status.textContent = ok ? "✅ Stream URL copiado al portapapeles." : "⚠️ No pude copiar. Te lo muestro en consola.";
         if (!ok) console.log("Stream URL:", url);
