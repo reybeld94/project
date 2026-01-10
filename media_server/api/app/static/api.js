@@ -171,6 +171,7 @@ export const api = {
     play: (liveId, arg="m3u8") => {
   let format = "m3u8";
   let alt1 = false, alt2 = false, alt3 = false;
+  let openVlc = false;
 
   if (typeof arg === "string") {
     format = arg || "m3u8";
@@ -179,6 +180,7 @@ export const api = {
     alt1 = !!arg.alt1;
     alt2 = !!arg.alt2;
     alt3 = !!arg.alt3;
+    openVlc = !!arg.openVlc;
   }
 
   const qs = new URLSearchParams();
@@ -186,6 +188,7 @@ export const api = {
   if (alt1) qs.set("alt1", "1");
   if (alt2) qs.set("alt2", "1");
   if (alt3) qs.set("alt3", "1");
+  if (openVlc) qs.set("open_vlc", "1");
 
   return req(`/live/${encodeURIComponent(liveId)}/play?${qs.toString()}`);
 },

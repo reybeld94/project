@@ -845,7 +845,7 @@ el("div", { class:"pt-2 border-t border-white/10" }, epgPanel),
     onClick: async (e) => {
       e.stopPropagation();
       try {
-        const r = await api.live.play(item.id, "m3u8");
+        const r = await api.live.play(item.id, { format: "m3u8", openVlc: true });
         const url = r?.url || "";
         if (!url) { status.textContent = "❌ No se pudo obtener el URL."; return; }
 
