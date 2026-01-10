@@ -15,10 +15,10 @@ def _resolve_vlc_binary() -> str | None:
     return shutil.which("vlc") or shutil.which("cvlc")
 
 
-def launch_vlc(url: str) -> None:
+def launch_vlc(url: str) -> bool:
     vlc_bin = _resolve_vlc_binary()
     if not vlc_bin:
-        raise RuntimeError("VLC binary not found. Set VLC_BIN or install VLC on the server.")
+        return False
 
     subprocess.Popen(
         [vlc_bin, "--play-and-exit", url],
@@ -26,3 +26,4 @@ def launch_vlc(url: str) -> None:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+    return True

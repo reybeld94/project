@@ -186,11 +186,7 @@ def get_live_play_url(
 
     out = {"id": str(target.id), "name": target.name, "url": url}
     if open_vlc:
-        try:
-            launch_vlc(url)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        out["vlc_started"] = True
+        out["vlc_started"] = launch_vlc(url)
     if not alt_label:
         for n in (1, 2, 3):
             alt_id = getattr(s, f"alt{n}_stream_id")
