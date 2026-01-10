@@ -18,7 +18,6 @@ def list_series(
     limit: int = 50,
     offset: int = 0,
     active_only: bool = True,
-    approved: bool | None = None,
     db: Session = Depends(get_db),
 ):
     p = db.get(Provider, provider_id)
@@ -29,9 +28,6 @@ def list_series(
 
     if active_only:
         stmt = stmt.where(SeriesItem.is_active == True)
-
-    if approved is not None:
-        stmt = stmt.where(SeriesItem.approved == approved)
 
     if category_ext_id is not None:
         cat = db.execute(
@@ -63,7 +59,6 @@ def list_series(
                 "cover": x.custom_cover_url or x.cover,
                 "raw_cover": x.cover,
                 "custom_cover_url": x.custom_cover_url,
-                "approved": x.approved,
                 "is_active": x.is_active,
                 "category_name": x.category.name if x.category else None,
                 "category_ext_id": x.category.provider_category_id if x.category else None,
@@ -183,13 +178,6 @@ def update_series(series_id: str, payload: SeriesItemUpdate, db: Session = Depen
 
     reset_tmdb = False
 
-    if "approved" in data:
-        new_approved = bool(data["approved"])
-        if new_approved != s.approved:
-            s.approved = new_approved
-            if s.approved and s.tmdb_status != "synced":
-                reset_tmdb = True
-
     if "normalized_name" in data:
         new_name = (data["normalized_name"] or "").strip() or None
         if new_name != s.normalized_name:
@@ -227,7 +215,6 @@ def update_series(series_id: str, payload: SeriesItemUpdate, db: Session = Depen
         "name": s.name,
         "normalized_name": s.normalized_name,
         "custom_cover_url": s.custom_cover_url,
-        "approved": s.approved,
     }
 
 @router.get("/all")
@@ -236,7 +223,6 @@ def list_series_all(
     limit: int = 60,
     offset: int = 0,
     active_only: bool = True,
-    approved: bool | None = None,
     db: Session = Depends(get_db),
 ):
     """
@@ -250,9 +236,6 @@ def list_series_all(
 
     if active_only:
         stmt = stmt.where(SeriesItem.is_active == True)
-
-    if approved is not None:
-        stmt = stmt.where(SeriesItem.approved == approved)
 
     if q:
         qq = f"%{q.strip()}%"
@@ -286,7 +269,6 @@ def list_series_all(
                 "raw_cover": x.cover,
                 "custom_cover_url": x.custom_cover_url,
 
-                "approved": x.approved,
                 "is_active": x.is_active,
 
                 "category_name": x.category.name if x.category else None,
@@ -362,7 +344,6 @@ def series_detail(series_id: str, db: Session = Depends(get_db)):
         "raw_cover": s.cover,
         "custom_cover_url": s.custom_cover_url,
 
-        "approved": s.approved,
         "is_active": s.is_active,
 
         "category_ext_id": s.category.provider_category_id if s.category else None,

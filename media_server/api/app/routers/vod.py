@@ -40,7 +40,6 @@ def list_vod(
         limit: int = 50,
         offset: int = 0,
         active_only: bool = True,
-        approved: bool | None = None,
         db: Session = Depends(get_db),
 ):
     p = db.get(Provider, provider_id)
@@ -51,9 +50,6 @@ def list_vod(
 
     if active_only:
         stmt = stmt.where(VodStream.is_active == True)
-
-    if approved is not None:
-        stmt = stmt.where(VodStream.approved == approved)
 
     if category_ext_id is not None:
         cat = db.execute(
@@ -97,7 +93,6 @@ def list_vod(
                 "container_extension": x.container_extension,
                 "rating": x.rating,
                 "added": x.added,
-                "approved": x.approved,
                 "is_active": x.is_active,
                 "category_ext_id": x.category.provider_category_id if x.category else None,
                 "category_name": x.category.name if x.category else None,
@@ -112,7 +107,6 @@ def list_vod_all(
         limit: int = 60,
         offset: int = 0,
         active_only: bool = True,
-        approved: bool | None = None,
         synced: bool | None = None,
         db: Session = Depends(get_db),
 ):
@@ -126,9 +120,6 @@ def list_vod_all(
 
     # Se eliminan filtros por activo (provider o stream) para mostrar todos los VOD.
     # El flag active_only se mantiene en la firma por compatibilidad, pero ya no filtra.
-
-    if approved is not None:
-        stmt = stmt.where(VodStream.approved == approved)
 
     # Normaliza comparaciones de TMDB para tolerar mayúsculas y variantes "sync".
     tmdb_synced_values = ["synced", "sync"]
@@ -175,7 +166,6 @@ def list_vod_all(
                 "rating": x.rating,
                 "added": x.added,
 
-                "approved": x.approved,
                 "is_active": x.is_active,
 
                 "tmdb_status": x.tmdb_status,
@@ -266,14 +256,6 @@ def update_vod(
 
     reset_tmdb = False
 
-    if "approved" in data:
-        new_approved = bool(data["approved"])
-        if new_approved != v.approved:
-            v.approved = new_approved
-            # si lo acaban de aprobar y no está synced, queremos intentar ya
-            if v.approved and v.tmdb_status != "synced":
-                reset_tmdb = True
-
     if "normalized_name" in data:
         new_name = (data["normalized_name"] or "").strip() or None
         if new_name != v.normalized_name:
@@ -304,7 +286,6 @@ def update_vod(
     return {
         "id": str(v.id),
         "name": v.name,
-        "approved": v.approved,
         "normalized_name": v.normalized_name,
         "custom_poster_url": v.custom_poster_url,
     }
@@ -373,7 +354,6 @@ def vod_detail(vod_id: str, db: Session = Depends(get_db)):
         "rating": v.rating,
         "added": v.added,
 
-        "approved": v.approved,
         "is_active": v.is_active,
 
         "category_ext_id": v.category.provider_category_id if v.category else None,

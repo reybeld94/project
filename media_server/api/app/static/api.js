@@ -106,10 +106,10 @@ export const api = {
     saveConfig: (payload) => req("/tmdb/config", { method:"PATCH", body: payload }),
     status: () => req("/tmdb/status"),
     genres: ({ kind="movie" }={}) => req(`/tmdb/genres?kind=${encodeURIComponent(kind)}`),
-    syncMovies: ({ limit=20, approvedOnly=true }={}) =>
-      req(`/tmdb/sync/movies?limit=${limit}&approved_only=${approvedOnly}`, { method:"POST" }),
-    syncSeries: ({ limit=20, approvedOnly=true }={}) =>
-      req(`/tmdb/sync/series?limit=${limit}&approved_only=${approvedOnly}`, { method:"POST" }),
+    syncMovies: ({ limit=20 }={}) =>
+      req(`/tmdb/sync/movies?limit=${limit}`, { method:"POST" }),
+    syncSeries: ({ limit=20 }={}) =>
+      req(`/tmdb/sync/series?limit=${limit}`, { method:"POST" }),
   },
 
 
@@ -129,10 +129,9 @@ export const api = {
 
 
     vod: {
-  listAll: ({ q="", limit=60, offset=0, activeOnly=true, approved=null, synced=null }={}) => {
-    const ap = approved === null ? "" : `&approved=${approved}`;
+  listAll: ({ q="", limit=60, offset=0, activeOnly=true, synced=null }={}) => {
     const sy = synced === null ? "" : `&synced=${synced}`;
-    return req(`/vod/all?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&active_only=${activeOnly}${ap}${sy}`);
+    return req(`/vod/all?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&active_only=${activeOnly}${sy}`);
   },
 
   play: (vodId, format=null) => {
@@ -146,9 +145,8 @@ export const api = {
 
 
     series: {
-    listAll: ({ q="", limit=60, offset=0, activeOnly=true, approved=null }={}) => {
-      const ap = approved === null ? "" : `&approved=${approved}`;
-      return req(`/series/all?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&active_only=${activeOnly}${ap}`);
+    listAll: ({ q="", limit=60, offset=0, activeOnly=true }={}) => {
+      return req(`/series/all?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&active_only=${activeOnly}`);
     },
     seasons: (id) => req(`/series/${encodeURIComponent(id)}/seasons`),
     get: (seriesId) => req(`/series/${seriesId}`),

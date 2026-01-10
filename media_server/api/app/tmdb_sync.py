@@ -230,14 +230,11 @@ def _select_candidates(
     model,
     *,
     limit: int,
-    approved_only: bool,
     settings: TmdbSyncSettings,
 ) -> list:
     now = datetime.now(timezone.utc)
     candidate_limit = min(max(limit * 5, limit), 1000)
     stmt = select(model)
-    if approved_only:
-        stmt = stmt.where(model.approved == True)
     stmt = stmt.order_by(model.tmdb_last_sync.asc().nullsfirst(), model.created_at.asc())
     rows = db.execute(stmt.limit(candidate_limit)).scalars().all()
     picked = []
@@ -460,7 +457,6 @@ def run_tmdb_sync(
     *,
     kind: str,
     limit: int,
-    approved_only: bool,
     cfg: TmdbConfig,
     db: Session,
     cooldown_override_minutes: int | None = None,
@@ -470,7 +466,7 @@ def run_tmdb_sync(
         settings.cooldown_missing_minutes = cooldown_override_minutes
         settings.cooldown_failed_minutes = cooldown_override_minutes
         settings.cooldown_transient_minutes = cooldown_override_minutes
-    rows = _select_candidates(db, VodStream if kind == "movie" else SeriesItem, limit=limit, approved_only=approved_only, settings=settings)
+    rows = _select_candidates(db, VodStream if kind == "movie" else SeriesItem, limit=limit, settings=settings)
     tasks = [TmdbSyncTask(kind=kind, item_id=row.id) for row in rows]
     metrics = TmdbSyncMetrics()
     if tasks:
@@ -488,10 +484,9 @@ def run_tmdb_sync(
     else:
         metrics.finish()
         log.info(
-            "TMDB sync %s: no eligible items (limit=%s approved_only=%s resync_days=%s cooldown_missing=%s cooldown_failed=%s cooldown_transient=%s cooldown_invalid_days=%s)",
+            "TMDB sync %s: no eligible items (limit=%s resync_days=%s cooldown_missing=%s cooldown_failed=%s cooldown_transient=%s cooldown_invalid_days=%s)",
             kind,
             limit,
-            approved_only,
             settings.resync_days,
             settings.cooldown_missing_minutes,
             settings.cooldown_failed_minutes,
@@ -537,12 +532,11 @@ def run_tmdb_sync(
 def run_tmdb_sync_now(
     *,
     limit: int = 100,
-    approved_only: bool = True,
     cfg: TmdbConfig,
     db: Session,
 ) -> dict:
-    movie_result = run_tmdb_sync(kind="movie", limit=limit, approved_only=approved_only, cfg=cfg, db=db)
-    series_result = run_tmdb_sync(kind="series", limit=limit, approved_only=approved_only, cfg=cfg, db=db)
+    movie_result = run_tmdb_sync(kind="movie", limit=limit, cfg=cfg, db=db)
+    series_result = run_tmdb_sync(kind="series", limit=limit, cfg=cfg, db=db)
     return {
         "movies": movie_result,
         "series": series_result,

@@ -72,7 +72,6 @@ def _sync_tmdb_movies_blocking():
     try:
         return tmdb_sync_movies(
             limit=TMDB_AUTO_SYNC_BATCH_MOVIES,
-            approved_only=True,
             cooldown_minutes=0,
             db=db,
         )
@@ -84,7 +83,6 @@ def _sync_tmdb_series_blocking():
     try:
         return tmdb_sync_series(
             limit=TMDB_AUTO_SYNC_BATCH_SERIES,
-            approved_only=True,
             cooldown_minutes=0,
             db=db,
         )

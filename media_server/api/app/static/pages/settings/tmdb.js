@@ -12,12 +12,6 @@ export function TmdbTab() {
   let language = "en-US";
   let region = "US";
   let rps = 5;
-  let syncApprovedOnly = true;
-
-  try {
-    const raw = localStorage.getItem("tmdb:approvedOnly");
-    if (raw === "false") syncApprovedOnly = false;
-  } catch {}
 
   let autoRefresh = true;
   let refreshSec = 3;
@@ -268,7 +262,7 @@ export function TmdbTab() {
     onClick: async () => {
       msg.textContent = "Syncing movies…";
       try {
-        await api.tmdb.syncMovies({ limit: 20, approvedOnly: syncApprovedOnly });
+        await api.tmdb.syncMovies({ limit: 20 });
         await refreshNow();
         msg.textContent = "Movies batch done ✅";
       } catch (e) {
@@ -282,22 +276,12 @@ export function TmdbTab() {
     onClick: async () => {
       msg.textContent = "Syncing series…";
       try {
-        await api.tmdb.syncSeries({ limit: 20, approvedOnly: syncApprovedOnly });
+        await api.tmdb.syncSeries({ limit: 20 });
         await refreshNow();
         msg.textContent = "Series batch done ✅";
       } catch (e) {
         msg.textContent = `Error: ${e.message}`;
       }
-    }
-  });
-
-  const approvedOnlyToggle = el("input", {
-    type:"checkbox",
-    class:"scale-110",
-    checked: syncApprovedOnly,
-    onchange: (e) => {
-      syncApprovedOnly = !!e.target.checked;
-      try { localStorage.setItem("tmdb:approvedOnly", syncApprovedOnly ? "true" : "false"); } catch {}
     }
   });
 
@@ -335,10 +319,6 @@ export function TmdbTab() {
         saveBtn,
         syncMoviesBtn,
         syncSeriesBtn,
-        el("label", { class:"flex items-center gap-2 text-sm text-zinc-300" }, [
-          approvedOnlyToggle,
-          el("span", {}, "Sync solo aprobados"),
-        ])
       ]),
       msg,
     ]),
