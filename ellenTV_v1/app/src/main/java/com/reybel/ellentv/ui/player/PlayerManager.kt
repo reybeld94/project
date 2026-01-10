@@ -58,7 +58,11 @@ class PlayerManager(context: Context) {
     private var rebufferCount = 0
     private var bufferLevel = BufferLevel.NORMAL
     private var lastRebufferTime = 0L
+    private var lastBufferUpgradeAt = 0L
     private var needsBufferUpgrade = false
+
+    private val rebufferUpgradeThreshold = 3
+    private val minBufferUpgradeIntervalMs = 120_000L
 
     // Crossfade
     private var isCrossfading = false
@@ -198,22 +202,34 @@ class PlayerManager(context: Context) {
                                 1
                             }
 
-                            Log.w("ELLENTV_BUFFER", "Rebuffer #$rebufferCount (${timeSinceLastRebuffer}ms desde último)")
+                            Log.w(
+                                "ELLENTV_BUFFER",
+                                "Rebuffer #$rebufferCount (${timeSinceLastRebuffer}ms desde último, threshold=$rebufferUpgradeThreshold)"
+                            )
 
                             lastRebufferTime = now
 
-                            if (rebufferCount >= 2 && bufferLevel != BufferLevel.MAXIMUM) {
-                                val skipToHigh = bufferLevel == BufferLevel.LOW || bufferLevel == BufferLevel.NORMAL
-                                Log.e(
-                                    "ELLENTV_BUFFER",
-                                    "Frequent rebuffering! Upgrading buffer (aggressive=$skipToHigh)..."
-                                )
-                                needsBufferUpgrade = true
-                                onHealthIssue?.invoke("Stream inestable - Aumentando buffer")
+                            if (rebufferCount >= rebufferUpgradeThreshold && bufferLevel != BufferLevel.MAXIMUM) {
+                                val timeSinceUpgrade = now - lastBufferUpgradeAt
+                                if (timeSinceUpgrade >= minBufferUpgradeIntervalMs) {
+                                    val skipToHigh = bufferLevel == BufferLevel.LOW || bufferLevel == BufferLevel.NORMAL
+                                    Log.e(
+                                        "ELLENTV_BUFFER",
+                                        "Frequent rebuffering! Upgrading buffer (aggressive=$skipToHigh, threshold=$rebufferUpgradeThreshold)..."
+                                    )
+                                    needsBufferUpgrade = true
+                                    onHealthIssue?.invoke("Stream inestable - Aumentando buffer")
+                                    lastBufferUpgradeAt = now
 
-                                scope.launch {
-                                    delay(800)
-                                    if (needsBufferUpgrade) upgradeBuffer(skipToHigh)
+                                    scope.launch {
+                                        delay(800)
+                                        if (needsBufferUpgrade) upgradeBuffer(skipToHigh)
+                                    }
+                                } else {
+                                    Log.w(
+                                        "ELLENTV_BUFFER",
+                                        "Upgrade skipped (cooldown=${minBufferUpgradeIntervalMs}ms, since=${timeSinceUpgrade}ms)"
+                                    )
                                 }
                             }
                         }
@@ -572,6 +588,7 @@ class PlayerManager(context: Context) {
         currentUrlIndex = 0
         rebufferCount = 0
         lastRebufferTime = 0L
+        lastBufferUpgradeAt = 0L
         needsBufferUpgrade = false
         liveStallRecoveryAttempts = 0
 
@@ -629,6 +646,7 @@ class PlayerManager(context: Context) {
 
         rebufferCount = 0
         lastRebufferTime = 0L
+        lastBufferUpgradeAt = 0L
         needsBufferUpgrade = false
         lastBufferedPos = 0L
         lastBufferedProgressAt = 0L
@@ -714,6 +732,7 @@ class PlayerManager(context: Context) {
         isCrossfading = false
         rebufferCount = 0
         isVodContent = false
+        lastBufferUpgradeAt = 0L
     }
 
     fun release() {
