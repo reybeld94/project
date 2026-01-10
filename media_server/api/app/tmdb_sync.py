@@ -274,10 +274,12 @@ async def _sync_one_task(
 
         details = None
         best = None
+        resolved_tmdb_id = None
 
         if item.tmdb_id:
+            resolved_tmdb_id = int(item.tmdb_id)
             details = await client.get_json(
-                f"/{'movie' if task.kind == 'movie' else 'tv'}/{int(item.tmdb_id)}",
+                f"/{'movie' if task.kind == 'movie' else 'tv'}/{resolved_tmdb_id}",
                 params={"language": language, "append_to_response": _append_to_response(task.kind)},
             )
         else:
@@ -309,9 +311,9 @@ async def _sync_one_task(
                 metrics.missing += 1
                 return
 
-            item.tmdb_id = int(best.get("id"))
+            resolved_tmdb_id = int(best.get("id"))
             details = await client.get_json(
-                f"/{'movie' if task.kind == 'movie' else 'tv'}/{item.tmdb_id}",
+                f"/{'movie' if task.kind == 'movie' else 'tv'}/{resolved_tmdb_id}",
                 params={"language": language, "append_to_response": _append_to_response(task.kind)},
             )
 
@@ -327,43 +329,54 @@ async def _sync_one_task(
 
         now = datetime.now(timezone.utc)
         with db.begin():
-            item.tmdb_id = int(details.get("id"))
-            item.tmdb_status = "synced"
-            item.tmdb_error = None
-            item.tmdb_error_kind = None
-            item.tmdb_fail_count = 0
-            item.tmdb_last_sync = now
+            tmdb_id = int(details.get("id")) if details.get("id") is not None else resolved_tmdb_id
+            target = item
+            if tmdb_id is not None:
+                dup = db.execute(
+                    select(model)
+                    .where(model.provider_id == item.provider_id, model.tmdb_id == tmdb_id, model.id != item.id)
+                    .order_by(model.created_at.desc(), model.id.desc())
+                ).scalars().first()
+                if dup:
+                    if dup.tmdb_status == "synced" and item.tmdb_status != "synced":
+                        target = dup
+                        db.delete(item)
+                    else:
+                        db.delete(dup)
+                        db.flush()
+            target.tmdb_id = tmdb_id
+            target.tmdb_status = "synced"
+            target.tmdb_error = None
+            target.tmdb_error_kind = None
+            target.tmdb_fail_count = 0
+            target.tmdb_last_sync = now
             if task.kind == "movie":
-                item.tmdb_title = details.get("title")
+                target.tmdb_title = details.get("title")
                 rd = (details.get("release_date") or "").strip()
                 if rd:
                     try:
-                        item.tmdb_release_date = datetime.strptime(rd, "%Y-%m-%d")
+                        target.tmdb_release_date = datetime.strptime(rd, "%Y-%m-%d")
                     except Exception:
-                        item.tmdb_release_date = None
+                        target.tmdb_release_date = None
             else:
-                item.tmdb_title = details.get("name")
+                target.tmdb_title = details.get("name")
                 ad = (details.get("first_air_date") or "").strip()
                 if ad:
                     try:
-                        item.tmdb_release_date = datetime.strptime(ad, "%Y-%m-%d")
+                        target.tmdb_release_date = datetime.strptime(ad, "%Y-%m-%d")
                     except Exception:
-                        item.tmdb_release_date = None
-            item.tmdb_overview = details.get("overview")
-            item.tmdb_poster_path = details.get("poster_path")
-            item.tmdb_backdrop_path = details.get("backdrop_path")
-            item.tmdb_vote_average = details.get("vote_average")
-            item.tmdb_genres = [g.get("name") for g in (details.get("genres") or []) if g.get("name")]
-            item.tmdb_raw = details
-            db.flush()
-            if task.kind == "movie":
-                _dedupe_vod_by_tmdb_id(db, item.provider_id, item.tmdb_id)
-            else:
-                _dedupe_series_by_tmdb_id(db, item.provider_id, item.tmdb_id)
+                        target.tmdb_release_date = None
+            target.tmdb_overview = details.get("overview")
+            target.tmdb_poster_path = details.get("poster_path")
+            target.tmdb_backdrop_path = details.get("backdrop_path")
+            target.tmdb_vote_average = details.get("vote_average")
+            target.tmdb_genres = [g.get("name") for g in (details.get("genres") or []) if g.get("name")]
+            target.tmdb_raw = details
         metrics.synced += 1
     except TmdbRequestError as exc:
         if item is None:
             return
+        db.rollback()
         with db.begin():
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
@@ -374,6 +387,7 @@ async def _sync_one_task(
     except Exception as exc:
         if item is None:
             return
+        db.rollback()
         with db.begin():
             item.tmdb_status = "failed"
             item.tmdb_error = str(exc)[:480]
