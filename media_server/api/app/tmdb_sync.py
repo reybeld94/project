@@ -302,6 +302,8 @@ async def _sync_one_task(
                 "release_date" if task.kind == "movie" else "first_air_date",
             )
             if not best:
+                if db.in_transaction():
+                    db.rollback()
                 with db.begin():
                     item.tmdb_status = "missing"
                     item.tmdb_error = None
@@ -318,6 +320,8 @@ async def _sync_one_task(
             )
 
         if not details:
+            if db.in_transaction():
+                db.rollback()
             with db.begin():
                 item.tmdb_status = "missing"
                 item.tmdb_error = None
@@ -328,6 +332,8 @@ async def _sync_one_task(
             return
 
         now = datetime.now(timezone.utc)
+        if db.in_transaction():
+            db.rollback()
         with db.begin():
             tmdb_id = int(details.get("id")) if details.get("id") is not None else resolved_tmdb_id
             target = item
