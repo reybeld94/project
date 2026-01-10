@@ -4,6 +4,7 @@ from sqlalchemy import select, func, or_
 from app.schemas import LiveStreamUpdate
 from app.deps import get_db
 from app.models import Provider, Category, LiveStream
+from app.vlc import launch_vlc
 from sqlalchemy.exc import IntegrityError
 import os
 import shutil
@@ -122,6 +123,7 @@ def get_live_play_url(
     alt1: bool = False,
     alt2: bool = False,
     alt3: bool = False,
+    open_vlc: bool = False,
     db: Session = Depends(get_db),
 ):
     """
@@ -183,6 +185,12 @@ def get_live_play_url(
     url = f"{p.base_url.rstrip('/')}/live/{p.username}/{p.password}/{target.provider_stream_id}.{fmt}"
 
     out = {"id": str(target.id), "name": target.name, "url": url}
+    if open_vlc:
+        try:
+            launch_vlc(url)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        out["vlc_started"] = True
     if not alt_label:
         for n in (1, 2, 3):
             alt_id = getattr(s, f"alt{n}_stream_id")
