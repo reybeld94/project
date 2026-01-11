@@ -922,6 +922,10 @@ fun TvHomeScreen(
                     .focusRequester(fullscreenFocus)
                     .focusable()
                     .onPreviewKeyEvent { event ->
+                        if (vodActiveFullscreen) {
+                            return@onPreviewKeyEvent false
+                        }
+
                         val ne = event.nativeKeyEvent
 
                         if (ne.action != android.view.KeyEvent.ACTION_UP) {
@@ -972,7 +976,8 @@ fun TvHomeScreen(
                 VideoPlayerView(
                     player = player,
                     modifier = Modifier.fillMaxSize(),
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                    showVodControls = vodActiveFullscreen
                 )
 
                 if (fullscreenInfoVisible && section == AppSection.LIVE && !vodActiveFullscreen) {
