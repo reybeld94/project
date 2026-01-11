@@ -168,6 +168,88 @@ def series_episode_play(
     return {"provider_id": provider_id, "episode_id": episode_id, "url": url}
 
 
+@router.get("/episode/{episode_id}/tracks")
+def series_episode_tracks(
+    episode_id: int,
+    provider_id: str,
+    series_id: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Intenta obtener info de tracks desde Xtream get_series_info.
+    Fallback: retorna estructura vacía (ExoPlayer detectará en runtime).
+    """
+    p = db.get(Provider, provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    series_item = None
+    if series_id:
+        series_item = db.get(SeriesItem, series_id)
+        if not series_item:
+            raise HTTPException(status_code=404, detail="Series not found")
+        if series_item.provider_id != p.id:
+            raise HTTPException(status_code=404, detail="Series not found for provider")
+
+    def _empty_response(note: str):
+        return {
+            "episode_id": episode_id,
+            "provider_id": provider_id,
+            "series_id": str(series_item.id) if series_item else None,
+            "container": None,
+            "audio_tracks": [],
+            "subtitle_tracks": [],
+            "note": note,
+        }
+
+    if not series_item:
+        return _empty_response("Info no disponible, ExoPlayer detectará tracks")
+
+    try:
+        info = xtream_get(
+            p.base_url,
+            p.username,
+            p.password,
+            "get_series_info",
+            series_id=series_item.provider_series_id,
+        )
+        episodes_raw = info.get("episodes") or {}
+        target_id = str(episode_id)
+        episode_data = None
+
+        if isinstance(episodes_raw, dict):
+            for eps in episodes_raw.values():
+                for ep in eps or []:
+                    ep_id = ep.get("id") or ep.get("episode_id")
+                    if ep_id is not None and str(ep_id) == target_id:
+                        episode_data = ep
+                        break
+                if episode_data:
+                    break
+        elif isinstance(episodes_raw, list):
+            for ep in episodes_raw:
+                ep_id = ep.get("id") or ep.get("episode_id")
+                if ep_id is not None and str(ep_id) == target_id:
+                    episode_data = ep
+                    break
+
+        if not episode_data:
+            return _empty_response("Info no disponible, ExoPlayer detectará tracks")
+
+        return {
+            "episode_id": episode_id,
+            "provider_id": provider_id,
+            "series_id": str(series_item.id),
+            "container": episode_data.get("container_extension") or episode_data.get("container"),
+            "audio_tracks": episode_data.get("audio", []),
+            "subtitle_tracks": episode_data.get("subtitles", []),
+            "duration_secs": episode_data.get("duration_secs"),
+            "note": "Tracks finales detectados por ExoPlayer al reproducir",
+        }
+    except Exception:
+        return _empty_response("Info no disponible, ExoPlayer detectará tracks")
+
+
 @router.patch("/{series_id}")
 def update_series(series_id: str, payload: SeriesItemUpdate, db: Session = Depends(get_db)):
     s = db.get(SeriesItem, series_id)
