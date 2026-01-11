@@ -100,12 +100,14 @@ fun MoviesScreen(
     Box(modifier = modifier.fillMaxSize()) {
         val backdropUrl = backdropItem?.backdropUrl
         if (!backdropUrl.isNullOrBlank()) {
-            OptimizedAsyncImage(
-                url = backdropUrl,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                targetSizePx = 1024
-            )
+            backdropUrl?.let { safeUrl ->
+                OptimizedAsyncImage(
+                    url = safeUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    targetSizePx = 1024
+                )
+            }
         }
 
         if (selectedItem != null) {
