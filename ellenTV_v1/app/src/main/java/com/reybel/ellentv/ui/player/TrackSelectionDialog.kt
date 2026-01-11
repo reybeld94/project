@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionOverrides
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import java.util.Locale
@@ -83,14 +84,20 @@ fun TrackSelectionDialog(
                             selected = item.group.isTrackSelected(item.trackIndex),
                             contentDescription = "Seleccionar audio ${item.displayLabel}",
                             onClick = {
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(
+                                val newOverrides = TrackSelectionOverrides.Builder(
+                                    player.trackSelectionParameters.trackSelectionOverrides
+                                )
+                                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                                    .addOverride(
                                         TrackSelectionOverride(
                                             item.group.mediaTrackGroup,
                                             listOf(item.trackIndex)
                                         )
                                     )
+                                    .build()
+                                player.trackSelectionParameters = player.trackSelectionParameters
+                                    .buildUpon()
+                                    .setTrackSelectionOverrides(newOverrides)
                                     .build()
                                 onDismiss()
                             }
@@ -113,10 +120,15 @@ fun TrackSelectionDialog(
                     selected = !subtitleSelected,
                     contentDescription = "Desactivar subtítulos",
                     onClick = {
+                        val newOverrides = TrackSelectionOverrides.Builder(
+                            player.trackSelectionParameters.trackSelectionOverrides
+                        )
+                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                            .build()
                         player.trackSelectionParameters = player.trackSelectionParameters
                             .buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                            .setTrackSelectionOverrides(newOverrides)
                             .build()
                         onDismiss()
                     }
@@ -135,15 +147,21 @@ fun TrackSelectionDialog(
                             selected = item.group.isTrackSelected(item.trackIndex),
                             contentDescription = "Seleccionar subtítulos ${item.displayLabel}",
                             onClick = {
-                                player.trackSelectionParameters = player.trackSelectionParameters
-                                    .buildUpon()
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                    .setOverrideForType(
+                                val newOverrides = TrackSelectionOverrides.Builder(
+                                    player.trackSelectionParameters.trackSelectionOverrides
+                                )
+                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                    .addOverride(
                                         TrackSelectionOverride(
                                             item.group.mediaTrackGroup,
                                             listOf(item.trackIndex)
                                         )
                                     )
+                                    .build()
+                                player.trackSelectionParameters = player.trackSelectionParameters
+                                    .buildUpon()
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    .setTrackSelectionOverrides(newOverrides)
                                     .build()
                                 onDismiss()
                             }
