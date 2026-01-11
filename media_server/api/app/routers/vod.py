@@ -242,6 +242,45 @@ def vod_info(
     return {"id": str(v.id), "provider_stream_id": v.provider_stream_id, "info": info}
 
 
+@router.get("/{vod_id}/tracks")
+def vod_tracks(
+        vod_id: str,
+        db: Session = Depends(get_db),
+):
+    """
+    Intenta obtener info de tracks desde Xtream get_vod_info.
+    Fallback: retorna estructura vacía (ExoPlayer detectará en runtime).
+    """
+    v = _get_vod_by_identifier(db, vod_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="VOD not found")
+
+    p = db.get(Provider, v.provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    try:
+        info = xtream_get(p.base_url, p.username, p.password, "get_vod_info", vod_id=v.provider_stream_id)
+        movie_data = info.get("movie_data") or info.get("info") or {}
+
+        return {
+            "vod_id": str(v.id),
+            "container": v.container_extension,
+            "audio_tracks": movie_data.get("audio", []),
+            "subtitle_tracks": movie_data.get("subtitles", []),
+            "duration_secs": movie_data.get("duration_secs"),
+            "note": "Tracks finales detectados por ExoPlayer al reproducir",
+        }
+    except Exception:
+        return {
+            "vod_id": str(v.id),
+            "container": v.container_extension,
+            "audio_tracks": [],
+            "subtitle_tracks": [],
+            "note": "Info no disponible, ExoPlayer detectará tracks",
+        }
+
+
 @router.patch("/{vod_id}")
 def update_vod(
         vod_id: str,
