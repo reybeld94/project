@@ -32,13 +32,13 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.view.KeyEvent as AndroidKeyEvent
 import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
 import com.reybel.ellentv.ui.components.PosterSkeletonCard
@@ -223,7 +223,7 @@ private fun MoviePosterCard(
             .width(cardWidth)
             .height(cardHeight)
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
+                if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_UP &&
                     (event.key == Key.Enter ||
                         event.key == Key.NumPadEnter ||
                         event.key == Key.DirectionCenter)
