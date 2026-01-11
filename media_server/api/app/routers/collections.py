@@ -288,6 +288,13 @@ def _augment_payload_with_catalog(payload: dict, db: Session) -> dict:
         enriched = dict(item)
         enriched["vod_id"] = str(vod.id)
         enriched["stream_url"] = stream_url
+        enriched["tmdb_vote_average"] = vod.tmdb_vote_average
+        enriched["tmdb_original_language"] = (vod.tmdb_raw or {}).get("original_language")
+        enriched["tmdb_cast"] = [
+            c.get("name")
+            for c in ((vod.tmdb_raw or {}).get("credits") or {}).get("cast") or []
+            if c.get("name")
+        ][:10]
         filtered_items.append(enriched)
 
     filtered_payload = dict(payload)
