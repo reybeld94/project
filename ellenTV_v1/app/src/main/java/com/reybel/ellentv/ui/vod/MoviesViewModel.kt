@@ -166,6 +166,9 @@ class MoviesViewModel(
             !genres.isNullOrEmpty() -> genres.map { it.name }
             else -> emptyList()
         }
+        val resolvedCast = (tmdbCast ?: cast)
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
         return VodItem(
             id = vodId ?: "tmdb:$id",
             name = displayTitle,
@@ -173,6 +176,12 @@ class MoviesViewModel(
             streamIcon = posterUrl,
             customPosterUrl = posterUrl,
             backdrop = backdropUrl,
+            tmdbStatus = "synced",
+            tmdbTitle = displayTitle,
+            tmdbId = id,
+            tmdbVoteAverage = tmdbVoteAverage ?: voteAverage,
+            tmdbOriginalLanguage = tmdbOriginalLanguage?.uppercase() ?: originalLanguage?.uppercase(),
+            tmdbCast = resolvedCast?.ifEmpty { null },
             overview = overview,
             genreNames = resolvedGenres.ifEmpty { null },
             releaseDate = release,

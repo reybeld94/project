@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
+import java.util.Locale
 
 // Colores del tema cinematográfico
 private val CyanAccent = Color(0xFF22D3EE)
@@ -83,6 +84,11 @@ fun MovieDetailsScreen(
         ?.joinToString(" • ")
     val year = item.releaseDate?.extractYearFromDate() ?: item.displayTitle.extractYearFromTitle()
     val overview = item.overview?.takeIf { it.isNotBlank() } ?: "Sin sinopsis disponible."
+    val cast = item.tmdbCast
+        ?.filter { it.isNotBlank() }
+        ?.take(4)
+        ?.joinToString(", ")
+    val voteAverage = item.tmdbVoteAverage?.let { String.format(Locale.US, "%.1f", it) }
 
     // Animación de entrada
     var visible by remember { mutableStateOf(false) }
@@ -295,6 +301,16 @@ fun MovieDetailsScreen(
                     )
                 }
 
+                cast?.let {
+                    Text(
+                        text = "Cast: $it",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Sinopsis
@@ -407,6 +423,14 @@ fun MovieDetailsScreen(
 
                     item.releaseDate?.let {
                         InfoCard(label = "Estreno", value = it)
+                    }
+
+                    voteAverage?.let {
+                        InfoCard(label = "Voto TMDB", value = it)
+                    }
+
+                    item.tmdbOriginalLanguage?.let {
+                        InfoCard(label = "Idioma", value = it)
                     }
 
                     item.containerExtension?.let {
