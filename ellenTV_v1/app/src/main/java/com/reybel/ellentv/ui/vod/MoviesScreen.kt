@@ -105,7 +105,7 @@ fun MoviesScreen(
             verticalArrangement = Arrangement.spacedBy(30.dp),
             modifier = Modifier.weight(1f)
         ) {
-            itemsIndexed(ui.collections, key = { _, collection -> collection.collectionId }) { index, collection ->
+            itemsIndexed(ui.collections) { index, collection ->
                 MoviesCollectionSection(
                     title = collection.title.ifBlank { "Colección #${index + 1}" },
                     collection = collection,
@@ -179,7 +179,7 @@ private fun MoviesCollectionSection(
                     PosterSkeletonCard(modifier = Modifier.width(128.dp))
                 }
             } else {
-                itemsIndexed(collection.items, key = { _, item -> item.id }) { itemIndex, item ->
+                itemsIndexed(collection.items) { itemIndex, item ->
                     MoviePosterCard(
                         item = item,
                         onOpenDetails = onOpenDetails,
