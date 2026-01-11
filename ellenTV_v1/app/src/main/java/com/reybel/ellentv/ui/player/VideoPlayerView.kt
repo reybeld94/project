@@ -17,6 +17,7 @@ fun VideoPlayerView(
     modifier: Modifier = Modifier,
     resizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT,
     showControls: Boolean = false,
+    showVodControls: Boolean = false,
     showStats: Boolean = false, // ← Nuevo parámetro para HUD
     playerManager: PlayerManager? = null // ← Para el HUD
 ) {
@@ -51,6 +52,13 @@ fun VideoPlayerView(
             PlayerStatsHUD(
                 playerManager = playerManager,
                 visible = true,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (showVodControls) {
+            VodPlayerControls(
+                player = player,
                 modifier = Modifier.fillMaxSize()
             )
         }
