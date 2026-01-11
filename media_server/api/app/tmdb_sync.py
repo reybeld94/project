@@ -8,11 +8,26 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import SeriesItem, TmdbConfig, VodStream
+from app.models import (
+    SeriesItem,
+    TmdbCast,
+    TmdbConfig,
+    TmdbCrew,
+    TmdbEntity,
+    TmdbGenre,
+    TmdbImage,
+    TmdbOriginCountry,
+    TmdbProductionCompany,
+    TmdbProductionCountry,
+    TmdbReleaseDate,
+    TmdbSpokenLanguage,
+    TmdbVideo,
+    VodStream,
+)
 from app.tmdb_client import TmdbAsyncClient, TmdbRequestError, _clean_title_and_year, _pick_best_result
 
 log = logging.getLogger(__name__)
@@ -113,6 +128,215 @@ def _append_to_response(kind: str) -> str:
     if kind == "movie":
         return "credits,videos,images,release_dates"
     return "credits,videos,images,content_ratings"
+
+
+def _parse_date(value: str | None) -> datetime.date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _store_tmdb_details(db: Session, *, kind: str, details: dict) -> None:
+    tmdb_id = details.get("id")
+    if tmdb_id is None:
+        return
+
+    entity = db.execute(
+        select(TmdbEntity).where(TmdbEntity.tmdb_id == tmdb_id, TmdbEntity.kind == kind)
+    ).scalars().first()
+    if entity is None:
+        entity = TmdbEntity(tmdb_id=tmdb_id, kind=kind)
+        db.add(entity)
+
+    collection = details.get("belongs_to_collection") or {}
+    entity.adult = details.get("adult")
+    entity.backdrop_path = details.get("backdrop_path")
+    entity.belongs_to_collection_id = collection.get("id")
+    entity.belongs_to_collection_name = collection.get("name")
+    entity.belongs_to_collection_poster_path = collection.get("poster_path")
+    entity.belongs_to_collection_backdrop_path = collection.get("backdrop_path")
+    entity.budget = details.get("budget")
+    entity.homepage = details.get("homepage")
+    entity.imdb_id = details.get("imdb_id")
+    entity.origin_language = details.get("original_language")
+    entity.original_title = details.get("original_title") or details.get("original_name")
+    entity.overview = details.get("overview")
+    entity.popularity = details.get("popularity")
+    entity.poster_path = details.get("poster_path")
+    entity.release_date = _parse_date(details.get("release_date") or details.get("first_air_date"))
+    entity.revenue = details.get("revenue")
+    runtime = details.get("runtime")
+    if runtime is None:
+        runtimes = details.get("episode_run_time") or []
+        runtime = runtimes[0] if runtimes else None
+    entity.runtime = runtime
+    entity.status = details.get("status")
+    entity.tagline = details.get("tagline")
+    entity.title = details.get("title") or details.get("name")
+    entity.video = details.get("video")
+    entity.vote_average = details.get("vote_average")
+    entity.vote_count = details.get("vote_count")
+    entity.updated_at = datetime.utcnow()
+
+    db.flush()
+
+    db.execute(delete(TmdbGenre).where(TmdbGenre.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbOriginCountry).where(TmdbOriginCountry.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbProductionCompany).where(TmdbProductionCompany.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbProductionCountry).where(TmdbProductionCountry.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbSpokenLanguage).where(TmdbSpokenLanguage.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbCast).where(TmdbCast.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbCrew).where(TmdbCrew.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbVideo).where(TmdbVideo.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbImage).where(TmdbImage.tmdb_entity_id == entity.id))
+    db.execute(delete(TmdbReleaseDate).where(TmdbReleaseDate.tmdb_entity_id == entity.id))
+
+    for genre in details.get("genres") or []:
+        db.add(
+            TmdbGenre(
+                tmdb_entity_id=entity.id,
+                genre_id=genre.get("id"),
+                name=genre.get("name"),
+            )
+        )
+
+    for code in details.get("origin_country") or []:
+        db.add(TmdbOriginCountry(tmdb_entity_id=entity.id, iso_3166_1=code))
+
+    for company in details.get("production_companies") or []:
+        db.add(
+            TmdbProductionCompany(
+                tmdb_entity_id=entity.id,
+                company_id=company.get("id"),
+                name=company.get("name"),
+                logo_path=company.get("logo_path"),
+                origin_country=company.get("origin_country"),
+            )
+        )
+
+    for country in details.get("production_countries") or []:
+        db.add(
+            TmdbProductionCountry(
+                tmdb_entity_id=entity.id,
+                iso_3166_1=country.get("iso_3166_1"),
+                name=country.get("name"),
+            )
+        )
+
+    for language in details.get("spoken_languages") or []:
+        db.add(
+            TmdbSpokenLanguage(
+                tmdb_entity_id=entity.id,
+                english_name=language.get("english_name"),
+                iso_639_1=language.get("iso_639_1"),
+                name=language.get("name"),
+            )
+        )
+
+    credits = details.get("credits") or {}
+    for cast in credits.get("cast") or []:
+        db.add(
+            TmdbCast(
+                tmdb_entity_id=entity.id,
+                person_id=cast.get("id"),
+                name=cast.get("name"),
+                original_name=cast.get("original_name"),
+                known_for_department=cast.get("known_for_department"),
+                popularity=cast.get("popularity"),
+                profile_path=cast.get("profile_path"),
+                adult=cast.get("adult"),
+                gender=cast.get("gender"),
+                cast_id=cast.get("cast_id"),
+                character=cast.get("character"),
+                credit_id=cast.get("credit_id"),
+                order_index=cast.get("order"),
+            )
+        )
+
+    for crew in credits.get("crew") or []:
+        db.add(
+            TmdbCrew(
+                tmdb_entity_id=entity.id,
+                person_id=crew.get("id"),
+                name=crew.get("name"),
+                original_name=crew.get("original_name"),
+                known_for_department=crew.get("known_for_department"),
+                popularity=crew.get("popularity"),
+                profile_path=crew.get("profile_path"),
+                adult=crew.get("adult"),
+                gender=crew.get("gender"),
+                department=crew.get("department"),
+                job=crew.get("job"),
+                credit_id=crew.get("credit_id"),
+            )
+        )
+
+    for video in (details.get("videos") or {}).get("results") or []:
+        db.add(
+            TmdbVideo(
+                tmdb_entity_id=entity.id,
+                tmdb_video_id=video.get("id"),
+                iso_639_1=video.get("iso_639_1"),
+                iso_3166_1=video.get("iso_3166_1"),
+                name=video.get("name"),
+                key=video.get("key"),
+                site=video.get("site"),
+                size=video.get("size"),
+                type=video.get("type"),
+                official=video.get("official"),
+                published_at=_parse_datetime(video.get("published_at")),
+            )
+        )
+
+    images = details.get("images") or {}
+    for image_type, items in {
+        "backdrop": images.get("backdrops") or [],
+        "logo": images.get("logos") or [],
+        "poster": images.get("posters") or [],
+    }.items():
+        for image in items:
+            db.add(
+                TmdbImage(
+                    tmdb_entity_id=entity.id,
+                    image_type=image_type,
+                    aspect_ratio=image.get("aspect_ratio"),
+                    height=image.get("height"),
+                    iso_3166_1=image.get("iso_3166_1"),
+                    iso_639_1=image.get("iso_639_1"),
+                    file_path=image.get("file_path"),
+                    vote_average=image.get("vote_average"),
+                    vote_count=image.get("vote_count"),
+                    width=image.get("width"),
+                )
+            )
+
+    for result in (details.get("release_dates") or {}).get("results") or []:
+        iso_3166_1 = result.get("iso_3166_1")
+        for entry in result.get("release_dates") or []:
+            db.add(
+                TmdbReleaseDate(
+                    tmdb_entity_id=entity.id,
+                    iso_3166_1=iso_3166_1,
+                    certification=entry.get("certification"),
+                    descriptors=entry.get("descriptors"),
+                    iso_639_1=entry.get("iso_639_1"),
+                    note=entry.get("note"),
+                    release_date=_parse_datetime(entry.get("release_date")),
+                    release_type=entry.get("type"),
+                )
+            )
 
 
 def _dedupe_vod_by_tmdb_id(db: Session, provider_id, tmdb_id: int | None) -> None:
@@ -385,6 +609,7 @@ async def _sync_one_task(
             target.tmdb_vote_average = details.get("vote_average")
             target.tmdb_genres = [g.get("name") for g in (details.get("genres") or []) if g.get("name")]
             target.tmdb_raw = details
+            _store_tmdb_details(db, kind=task.kind, details=details)
         metrics.synced += 1
     except TmdbRequestError as exc:
         if item is None:

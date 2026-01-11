@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy import Integer
-from sqlalchemy import String, DateTime, Boolean, ForeignKey, UniqueConstraint, text
+from sqlalchemy import String, DateTime, Boolean, ForeignKey, UniqueConstraint, text, Date, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Index
@@ -122,6 +122,188 @@ class TmdbCollectionCache(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class TmdbEntity(Base):
+    __tablename__ = "tmdb_entities"
+    __table_args__ = (
+        UniqueConstraint("tmdb_id", "kind", name="uq_tmdb_entities_tmdb_id_kind"),
+        Index("ix_tmdb_entities_tmdb_id", "tmdb_id"),
+        Index("ix_tmdb_entities_kind", "kind"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    tmdb_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)  # movie|series
+
+    adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    backdrop_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    belongs_to_collection_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    belongs_to_collection_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    belongs_to_collection_poster_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    belongs_to_collection_backdrop_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    budget: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    homepage: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    imdb_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    origin_language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    original_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    overview: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    popularity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    poster_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    release_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    revenue: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    runtime: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tagline: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    video: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    vote_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vote_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class TmdbGenre(Base):
+    __tablename__ = "tmdb_genres"
+    __table_args__ = (Index("ix_tmdb_genres_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    genre_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class TmdbOriginCountry(Base):
+    __tablename__ = "tmdb_origin_countries"
+    __table_args__ = (Index("ix_tmdb_origin_countries_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    iso_3166_1: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+
+class TmdbProductionCompany(Base):
+    __tablename__ = "tmdb_production_companies"
+    __table_args__ = (Index("ix_tmdb_production_companies_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    company_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logo_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    origin_country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+
+class TmdbProductionCountry(Base):
+    __tablename__ = "tmdb_production_countries"
+    __table_args__ = (Index("ix_tmdb_production_countries_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    iso_3166_1: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class TmdbSpokenLanguage(Base):
+    __tablename__ = "tmdb_spoken_languages"
+    __table_args__ = (Index("ix_tmdb_spoken_languages_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    english_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    iso_639_1: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class TmdbCast(Base):
+    __tablename__ = "tmdb_cast"
+    __table_args__ = (Index("ix_tmdb_cast_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    person_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    known_for_department: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    popularity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profile_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    gender: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cast_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    character: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    credit_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    order_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TmdbCrew(Base):
+    __tablename__ = "tmdb_crew"
+    __table_args__ = (Index("ix_tmdb_crew_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    person_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    known_for_department: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    popularity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profile_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    gender: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    department: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    job: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    credit_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class TmdbVideo(Base):
+    __tablename__ = "tmdb_videos"
+    __table_args__ = (Index("ix_tmdb_videos_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    tmdb_video_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    iso_639_1: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    iso_3166_1: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    site: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    official: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TmdbImage(Base):
+    __tablename__ = "tmdb_images"
+    __table_args__ = (Index("ix_tmdb_images_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    image_type: Mapped[str] = mapped_column(String(20), nullable=False)  # backdrop|logo|poster
+    aspect_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    iso_3166_1: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    iso_639_1: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vote_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vote_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TmdbReleaseDate(Base):
+    __tablename__ = "tmdb_release_dates"
+    __table_args__ = (Index("ix_tmdb_release_dates_entity_id", "tmdb_entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tmdb_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tmdb_entities.id", ondelete="CASCADE"))
+    iso_3166_1: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    certification: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    descriptors: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    iso_639_1: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    release_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    release_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Category(Base):
