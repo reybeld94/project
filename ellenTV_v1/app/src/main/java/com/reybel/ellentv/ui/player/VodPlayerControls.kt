@@ -127,7 +127,7 @@ fun VodPlayerControls(
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action != KeyEvent.ACTION_UP) {
-                    return@onPreviewKeyEvent controlsVisible
+                    return@onPreviewKeyEvent false
                 }
 
                 if (dialogVisible && native.keyCode == KeyEvent.KEYCODE_BACK) {
@@ -141,6 +141,7 @@ fun VodPlayerControls(
                         if (!controlsVisible) {
                             controlsVisible = true
                             interactionCounter += 1
+                            if (isPlaying) player.pause() else player.play()
                             return@onPreviewKeyEvent true
                         }
                         registerInteraction()
