@@ -31,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -223,10 +222,11 @@ private fun MoviePosterCard(
             .width(cardWidth)
             .height(cardHeight)
             .onPreviewKeyEvent { event ->
+                val keyCode = event.nativeKeyEvent.keyCode
                 if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_UP &&
-                    (event.key == Key.Enter ||
-                        event.key == Key.NumPadEnter ||
-                        event.key == Key.DirectionCenter)
+                    (keyCode == AndroidKeyEvent.KEYCODE_ENTER ||
+                        keyCode == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER ||
+                        keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER)
                 ) {
                     onOpenDetails(item)
                     true
