@@ -85,8 +85,7 @@ fun TrackSelectionDialog(
                             onClick = {
                                 player.trackSelectionParameters = player.trackSelectionParameters
                                     .buildUpon()
-                                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                                    .setTrackSelectionOverride(
+                                    .setOverrideForType(
                                         TrackSelectionOverride(
                                             item.group.mediaTrackGroup,
                                             listOf(item.trackIndex)
@@ -117,7 +116,7 @@ fun TrackSelectionDialog(
                         player.trackSelectionParameters = player.trackSelectionParameters
                             .buildUpon()
                             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setDisabledTextTrackSelection(true)
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                             .build()
                         onDismiss()
                     }
@@ -138,9 +137,8 @@ fun TrackSelectionDialog(
                             onClick = {
                                 player.trackSelectionParameters = player.trackSelectionParameters
                                     .buildUpon()
-                                    .setDisabledTextTrackSelection(false)
-                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                    .setTrackSelectionOverride(
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    .setOverrideForType(
                                         TrackSelectionOverride(
                                             item.group.mediaTrackGroup,
                                             listOf(item.trackIndex)
