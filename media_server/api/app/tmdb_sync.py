@@ -265,8 +265,9 @@ async def _sync_one_task(
         if not item:
             return
 
-        title = (item.normalized_name or item.name or "").strip()
-        if not title and not item.tmdb_id:
+        name = (item.name or "").strip()
+        normalized_name = (item.normalized_name or "").strip()
+        if not name and not normalized_name and not item.tmdb_id:
             return
 
         details = None
@@ -280,24 +281,33 @@ async def _sync_one_task(
                 params={"language": language, "append_to_response": _append_to_response(task.kind)},
             )
         else:
-            wanted, year = _clean_title_and_year(title)
             search_path = "/search/movie" if task.kind == "movie" else "/search/tv"
-            params = {"query": wanted, "language": language}
-            if task.kind == "movie":
-                params["region"] = region
-                if year:
-                    params["year"] = year
-            else:
-                if year:
-                    params["first_air_date_year"] = year
+            candidate_titles: list[str] = []
+            if name:
+                candidate_titles.append(name)
+            if normalized_name and normalized_name != name:
+                candidate_titles.append(normalized_name)
 
-            search = await client.get_json(search_path, params=params)
-            best = _pick_best_result(
-                search.get("results") or [],
-                wanted,
-                year,
-                "release_date" if task.kind == "movie" else "first_air_date",
-            )
+            for candidate in candidate_titles:
+                wanted, year = _clean_title_and_year(candidate)
+                params = {"query": wanted, "language": language}
+                if task.kind == "movie":
+                    params["region"] = region
+                    if year:
+                        params["year"] = year
+                else:
+                    if year:
+                        params["first_air_date_year"] = year
+
+                search = await client.get_json(search_path, params=params)
+                best = _pick_best_result(
+                    search.get("results") or [],
+                    wanted,
+                    year,
+                    "release_date" if task.kind == "movie" else "first_air_date",
+                )
+                if best:
+                    break
             if not best:
                 if db.in_transaction():
                     db.rollback()
