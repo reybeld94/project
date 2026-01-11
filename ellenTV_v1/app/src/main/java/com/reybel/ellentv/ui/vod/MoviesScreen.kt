@@ -28,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -69,15 +71,6 @@ fun MoviesScreen(
         selectedItem = null
     }
 
-    if (selectedItem != null) {
-        MovieDetailsScreen(
-            item = selectedItem ?: return,
-            onPlay = onPlay,
-            modifier = modifier
-        )
-        return
-    }
-
     val initialCollection = ui.collections.firstOrNull { it.items.isNotEmpty() }
     var focusedItem by remember(ui.collections) {
         mutableStateOf(initialCollection?.items?.firstOrNull())
@@ -85,6 +78,8 @@ fun MoviesScreen(
     var focusedCollectionId by remember(ui.collections) {
         mutableStateOf(initialCollection?.collectionId)
     }
+    val initialFocusRequester = remember { FocusRequester() }
+    var didRequestInitialFocus by remember(ui.collections) { mutableStateOf(false) }
 
     LaunchedEffect(ui.collections) {
         if (focusedItem == null) {
@@ -93,32 +88,62 @@ fun MoviesScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(30.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            itemsIndexed(ui.collections) { index, collection ->
-                MoviesCollectionSection(
-                    title = collection.title.ifBlank { "Colección #${index + 1}" },
-                    collection = collection,
-                    onRequestMore = onRequestMore,
-                    onPlay = onPlay,
-                    onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
-                    onItemFocused = { collectionId, item ->
-                        focusedCollectionId = collectionId
-                        focusedItem = item
-                    },
-                    onOpenDetails = { selectedItem = it },
-                    showMetadata = collection.collectionId == focusedCollectionId,
-                    metadataItem = focusedItem
-                )
+    LaunchedEffect(initialCollection?.collectionId) {
+        if (!didRequestInitialFocus && initialCollection?.items?.isNotEmpty() == true) {
+            initialFocusRequester.requestFocus()
+            didRequestInitialFocus = true
+        }
+    }
+
+    val backdropItem = selectedItem ?: focusedItem
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (!backdropItem?.backdropUrl.isNullOrBlank()) {
+            OptimizedAsyncImage(
+                url = backdropItem?.backdropUrl,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                targetSizePx = 1024
+            )
+        }
+
+        if (selectedItem != null) {
+            MovieDetailsScreen(
+                item = selectedItem ?: return@Box,
+                onPlay = onPlay,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(30.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    itemsIndexed(ui.collections) { index, collection ->
+                        MoviesCollectionSection(
+                            title = collection.title.ifBlank { "Colección #${index + 1}" },
+                            collection = collection,
+                            onRequestMore = onRequestMore,
+                            onPlay = onPlay,
+                            onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
+                            onItemFocused = { collectionId, item ->
+                                focusedCollectionId = collectionId
+                                focusedItem = item
+                            },
+                            onOpenDetails = { selectedItem = it },
+                            showMetadata = collection.collectionId == focusedCollectionId,
+                            metadataItem = focusedItem,
+                            initialCollectionId = initialCollection?.collectionId,
+                            initialFocusRequester = initialFocusRequester
+                        )
+                    }
+                }
             }
         }
     }
@@ -134,7 +159,9 @@ private fun MoviesCollectionSection(
     onItemFocused: (collectionId: String, item: VodItem) -> Unit,
     onOpenDetails: (VodItem) -> Unit,
     showMetadata: Boolean,
-    metadataItem: VodItem?
+    metadataItem: VodItem?,
+    initialCollectionId: String?,
+    initialFocusRequester: FocusRequester
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -183,6 +210,11 @@ private fun MoviesCollectionSection(
                         item = item,
                         onOpenDetails = onOpenDetails,
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
+                        focusRequester = if (collection.collectionId == initialCollectionId && itemIndex == 0) {
+                            initialFocusRequester
+                        } else {
+                            null
+                        },
                         onFocused = {
                             focusedIndex = itemIndex
                             onItemFocused(collection.collectionId, item)
@@ -203,6 +235,7 @@ private fun MoviePosterCard(
     item: VodItem,
     onOpenDetails: (VodItem) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
+    focusRequester: FocusRequester? = null,
     onFocused: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -221,6 +254,13 @@ private fun MoviePosterCard(
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
+            .then(
+                if (focusRequester != null) {
+                    Modifier.focusRequester(focusRequester)
+                } else {
+                    Modifier
+                }
+            )
             .onPreviewKeyEvent { event ->
                 val keyCode = event.nativeKeyEvent.keyCode
                 if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_UP &&
