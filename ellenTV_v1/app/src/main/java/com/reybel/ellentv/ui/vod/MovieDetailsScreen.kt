@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Share
@@ -36,16 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -55,12 +52,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
-import java.util.Locale
 
-// Colores del tema cinematográfico
+// Color base - negro puro para que los degradados funcionen
+private val BackgroundColor = Color.Black
 private val CyanAccent = Color(0xFF22D3EE)
 private val CyanAccentDark = Color(0xFF0891B2)
-private val SurfaceDark = Color(0xFF0F172A)
 
 @Composable
 fun MovieDetailsScreen(
@@ -83,24 +79,17 @@ fun MovieDetailsScreen(
         ?.distinct()
         ?.joinToString(" • ")
     val year = item.releaseDate?.extractYearFromDate() ?: item.displayTitle.extractYearFromTitle()
-    val overview = item.overview?.takeIf { it.isNotBlank() } ?: "Sin sinopsis disponible."
-    val cast = item.tmdbCast
-        ?.filter { it.isNotBlank() }
-        ?.take(4)
-        ?.joinToString(", ")
-    val voteAverage = item.tmdbVoteAverage?.let { String.format(Locale.US, "%.1f", it) }
+    val overview = item.overview?.takeIf { it.isNotBlank() } ?: "No description available."
+    val rating = item.tmdbVoteAverage?.let { String.format("%.1f", it) }
+    val language = item.tmdbOriginalLanguage?.uppercase()
+    val cast = item.tmdbCast?.take(4)?.joinToString(", ")
 
     // Animación de entrada
     var visible by remember { mutableStateOf(false) }
     val contentAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(600),
+        animationSpec = tween(500),
         label = "contentAlpha"
-    )
-    val backdropScale by animateFloatAsState(
-        targetValue = if (visible) 1f else 1.1f,
-        animationSpec = tween(800),
-        label = "backdropScale"
     )
 
     LaunchedEffect(Unit) {
@@ -111,52 +100,19 @@ fun MovieDetailsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SurfaceDark)
+            .background(BackgroundColor)
     ) {
         // ═══════════════════════════════════════════════════════════════
-        // CAPA 1: Fondo difuminado (backdrop blur como base)
-        // ═══════════════════════════════════════════════════════════════
-        if (!backdropUrl.isNullOrBlank()) {
-            OptimizedAsyncImage(
-                url = backdropUrl,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scale(1.2f)
-                    .blur(50.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                    .graphicsLayer { alpha = 0.4f },
-                contentScale = ContentScale.Crop,
-                targetSizePx = 512
-            )
-        }
-
-        // Overlay oscuro sobre el fondo difuminado
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            SurfaceDark.copy(alpha = 0.7f),
-                            SurfaceDark.copy(alpha = 0.85f),
-                            SurfaceDark.copy(alpha = 0.95f)
-                        )
-                    )
-                )
-        )
-
-        // ═══════════════════════════════════════════════════════════════
-        // CAPA 2: Backdrop principal - esquina superior derecha
-        // Pegado a bordes derecho y superior, fusionado con degradados suaves
+        // BACKDROP - esquina superior derecha con degradados a negro
         // ═══════════════════════════════════════════════════════════════
         if (!backdropUrl.isNullOrBlank()) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .fillMaxWidth(0.70f)
-                    .fillMaxHeight(0.75f)
-                    .scale(backdropScale)
+                    .fillMaxWidth(0.72f)
+                    .fillMaxHeight(0.85f)
             ) {
-                // Imagen principal del backdrop
+                // Imagen del backdrop
                 OptimizedAsyncImage(
                     url = backdropUrl,
                     modifier = Modifier.fillMaxSize(),
@@ -164,62 +120,39 @@ fun MovieDetailsScreen(
                     targetSizePx = 1920
                 )
 
-                // Fade lateral izquierdo - cubre TODO el alto, degradado amplio
+                // Degradado izquierdo - de negro a transparente
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.6f) // 60% del ancho para un fade muy suave
-                        .align(Alignment.CenterStart)
+                        .fillMaxSize()
                         .background(
                             Brush.horizontalGradient(
-                                colors = listOf(
-                                    SurfaceDark,
-                                    SurfaceDark.copy(alpha = 0.95f),
-                                    SurfaceDark.copy(alpha = 0.8f),
-                                    SurfaceDark.copy(alpha = 0.5f),
-                                    SurfaceDark.copy(alpha = 0.2f),
-                                    Color.Transparent
+                                colorStops = arrayOf(
+                                    0.0f to BackgroundColor,
+                                    0.05f to BackgroundColor.copy(alpha = 0.98f),
+                                    0.15f to BackgroundColor.copy(alpha = 0.85f),
+                                    0.30f to BackgroundColor.copy(alpha = 0.5f),
+                                    0.50f to BackgroundColor.copy(alpha = 0.1f),
+                                    0.65f to Color.Transparent,
+                                    1.0f to Color.Transparent
                                 )
                             )
                         )
                 )
 
-                // Fade inferior - cubre TODO el ancho, degradado amplio
+                // Degradado inferior - de transparente a negro
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.5f) // 50% del alto para fade suave
-                        .align(Alignment.BottomCenter)
+                        .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    SurfaceDark.copy(alpha = 0.2f),
-                                    SurfaceDark.copy(alpha = 0.5f),
-                                    SurfaceDark.copy(alpha = 0.8f),
-                                    SurfaceDark.copy(alpha = 0.95f),
-                                    SurfaceDark
+                                colorStops = arrayOf(
+                                    0.0f to Color.Transparent,
+                                    0.55f to Color.Transparent,
+                                    0.70f to BackgroundColor.copy(alpha = 0.4f),
+                                    0.85f to BackgroundColor.copy(alpha = 0.85f),
+                                    0.95f to BackgroundColor.copy(alpha = 0.98f),
+                                    1.0f to BackgroundColor
                                 )
-                            )
-                        )
-                )
-
-                // Fade esquina inferior izquierda - fusión diagonal extra
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .fillMaxHeight(0.7f)
-                        .align(Alignment.BottomStart)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    SurfaceDark,
-                                    SurfaceDark.copy(alpha = 0.8f),
-                                    SurfaceDark.copy(alpha = 0.4f),
-                                    Color.Transparent
-                                ),
-                                center = Offset(0f, Float.POSITIVE_INFINITY),
-                                radius = 1200f
                             )
                         )
                 )
@@ -227,62 +160,76 @@ fun MovieDetailsScreen(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // CAPA 3: Contenido principal
+        // CONTENIDO PRINCIPAL
         // ═══════════════════════════════════════════════════════════════
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 48.dp, vertical = 32.dp)
-                .graphicsLayer { alpha = contentAlpha },
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(start = 48.dp, end = 48.dp, top = 40.dp, bottom = 32.dp)
+                .graphicsLayer { alpha = contentAlpha }
         ) {
-            // ─────────────────────────────────────────────────────────────
-            // Sección superior: Título y metadata principal
-            // ─────────────────────────────────────────────────────────────
+            // Contenido izquierdo
             Column(
-                modifier = Modifier.fillMaxWidth(0.55f),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier
+                    .fillMaxWidth(0.50f)
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Indicador de tipo
+                // Label tipo
                 Text(
-                    text = "PELÍCULA",
+                    text = "MOVIE",
                     color = CyanAccent.copy(alpha = 0.9f),
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        letterSpacing = 3.sp,
-                        fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 )
 
-                // Título principal
+                // Título
                 Text(
                     text = item.displayTitle,
                     color = Color.White,
-                    style = MaterialTheme.typography.displayMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            offset = Offset(2f, 2f),
-                            blurRadius = 8f
-                        )
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.Bold
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // Chips de metadata
+                // Badges pequeños
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Año
-                    year?.let {
-                        MetadataChip(text = it)
+                    // Rating con estrella
+                    rating?.let {
+                        Surface(
+                            color = Color(0xFFFBBF24).copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFBBF24),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = it,
+                                    color = Color(0xFFFBBF24),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
+                        }
                     }
-
-                    // Tipo
-                    MetadataChip(text = "Movie")
-
-                    // Estado TMDB
+                    year?.let { MetadataChip(text = it) }
+                    language?.let { MetadataChip(text = it) }
                     if (item.tmdbStatus == "synced") {
                         MetadataChip(
                             text = "TMDB",
@@ -296,46 +243,45 @@ fun MovieDetailsScreen(
                 genre?.let {
                     Text(
                         text = it,
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.titleMedium
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
 
+                // Cast
                 cast?.let {
                     Text(
                         text = "Cast: $it",
-                        color = Color.White.copy(alpha = 0.5f),
-                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.45f),
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Sinopsis
+                // Descripción - máximo 3 líneas
                 Text(
                     text = overview,
-                    color = Color.White.copy(alpha = 0.85f),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = 26.sp
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        lineHeight = 22.sp
                     ),
-                    maxLines = 5,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // ─────────────────────────────────────────────────────────
                 // Botones de acción
-                // ─────────────────────────────────────────────────────────
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Botón PLAY principal
+                    // Botón PLAY
                     val playScale by animateFloatAsState(
-                        targetValue = if (playFocused) 1.05f else 1f,
+                        targetValue = if (playFocused) 1.03f else 1f,
                         animationSpec = tween(150),
                         label = "playScale"
                     )
@@ -343,139 +289,99 @@ fun MovieDetailsScreen(
                     Surface(
                         onClick = { onPlay(item.id) },
                         color = if (playFocused) CyanAccent else CyanAccentDark,
-                        shape = RoundedCornerShape(12.dp),
-                        shadowElevation = if (playFocused) 16.dp else 4.dp,
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
-                            .height(56.dp)
-                            .width(180.dp)
+                            .height(48.dp)
+                            .width(150.dp)
                             .scale(playScale)
                             .focusRequester(focusRequester)
                             .onFocusChanged { playFocused = it.isFocused }
                             .focusable()
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 20.dp),
+                            modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = null,
-                                tint = if (playFocused) SurfaceDark else Color.White,
-                                modifier = Modifier.size(28.dp)
+                                tint = if (playFocused) Color.Black else Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Reproducir",
-                                color = if (playFocused) SurfaceDark else Color.White,
-                                style = MaterialTheme.typography.titleMedium.copy(
+                                text = "Play",
+                                color = if (playFocused) Color.Black else Color.White,
+                                style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold
                                 )
                             )
                         }
                     }
 
-                    // Botón Mi Lista
+                    // My List
                     ActionButton(
                         icon = Icons.Outlined.Add,
-                        label = "Mi Lista",
+                        label = "My List",
                         isFocused = listFocused,
                         onFocusChanged = { listFocused = it },
-                        onClick = { /* TODO */ }
+                        onClick = { }
                     )
 
-                    // Botón circular Like
+                    // Like
                     CircularIconButton(
                         icon = Icons.Outlined.FavoriteBorder,
                         isFocused = likeFocused,
                         focusedColor = Color(0xFFEF4444),
                         onFocusChanged = { likeFocused = it },
-                        onClick = { /* TODO */ }
+                        onClick = { }
                     )
 
-                    // Botón circular Compartir
+                    // Share
                     CircularIconButton(
                         icon = Icons.Outlined.Share,
                         isFocused = shareFocused,
                         onFocusChanged = { shareFocused = it },
-                        onClick = { /* TODO */ }
+                        onClick = { }
                     )
                 }
             }
 
-            // ─────────────────────────────────────────────────────────────
-            // Sección inferior: Info adicional
-            // ─────────────────────────────────────────────────────────────
+            // Footer
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Info cards con datos disponibles
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item.tmdbId?.let {
-                        InfoCard(label = "TMDB ID", value = it.toString())
-                    }
+                // Empty space - info is shown above
+                Spacer(modifier = Modifier.weight(1f))
 
-                    item.releaseDate?.let {
-                        InfoCard(label = "Estreno", value = it)
-                    }
-
-                    voteAverage?.let {
-                        InfoCard(label = "Voto TMDB", value = it)
-                    }
-
-                    item.tmdbOriginalLanguage?.let {
-                        InfoCard(label = "Idioma", value = it)
-                    }
-
-                    item.containerExtension?.let {
-                        InfoCard(label = "Formato", value = it.uppercase())
-                    }
-
-                    // Si no hay mucha info de TMDB, mostrar estado
-                    if (item.tmdbId == null) {
-                        InfoCard(
-                            label = "Estado",
-                            value = when (item.tmdbStatus) {
-                                "synced" -> "Sincronizado"
-                                "pending" -> "Pendiente"
-                                "not_found" -> "No encontrado"
-                                else -> "Sin info"
-                            }
-                        )
-                    }
-                }
-
-                // Indicador de navegación
+                // Back hint
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Presiona",
-                        color = Color.White.copy(alpha = 0.4f),
-                        style = MaterialTheme.typography.bodySmall
+                        text = "Press",
+                        color = Color.White.copy(alpha = 0.35f),
+                        style = MaterialTheme.typography.labelSmall
                     )
                     Surface(
-                        color = Color.White.copy(alpha = 0.1f),
+                        color = Color.White.copy(alpha = 0.08f),
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             text = "←",
-                            color = Color.White.copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = Color.White.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
                     Text(
-                        text = "para volver",
-                        color = Color.White.copy(alpha = 0.4f),
-                        style = MaterialTheme.typography.bodySmall
+                        text = "to go back",
+                        color = Color.White.copy(alpha = 0.35f),
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
@@ -484,26 +390,26 @@ fun MovieDetailsScreen(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Componentes auxiliares
+// Componentes
 // ═══════════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun MetadataChip(
     text: String,
     backgroundColor: Color = Color.White.copy(alpha = 0.1f),
-    textColor: Color = Color.White.copy(alpha = 0.9f)
+    textColor: Color = Color.White.copy(alpha = 0.85f)
 ) {
     Surface(
         color = backgroundColor,
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(4.dp)
     ) {
         Text(
             text = text,
             color = textColor,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Medium
             ),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
         )
     }
 }
@@ -517,27 +423,27 @@ private fun ActionButton(
     onClick: () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.05f else 1f,
+        targetValue = if (isFocused) 1.03f else 1f,
         animationSpec = tween(150),
         label = "actionScale"
     )
 
     Surface(
         onClick = onClick,
-        color = if (isFocused) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.08f),
-        shape = RoundedCornerShape(12.dp),
+        color = if (isFocused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(
-            width = 2.dp,
-            color = if (isFocused) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.15f)
+            width = 1.5.dp,
+            color = if (isFocused) Color.White.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.12f)
         ),
         modifier = Modifier
-            .height(56.dp)
+            .height(48.dp)
             .scale(scale)
             .onFocusChanged { onFocusChanged(it.isFocused) }
             .focusable()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -545,13 +451,13 @@ private fun ActionButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 color = Color.White,
-                style = MaterialTheme.typography.titleSmall.copy(
+                style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Medium
                 )
             )
@@ -568,21 +474,21 @@ private fun CircularIconButton(
     onClick: () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.1f else 1f,
+        targetValue = if (isFocused) 1.05f else 1f,
         animationSpec = tween(150),
         label = "circularScale"
     )
 
     Surface(
         onClick = onClick,
-        color = if (isFocused) focusedColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+        color = if (isFocused) focusedColor.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.04f),
         shape = CircleShape,
         border = BorderStroke(
-            width = 2.dp,
-            color = if (isFocused) focusedColor.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.12f)
+            width = 1.5.dp,
+            color = if (isFocused) focusedColor.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f)
         ),
         modifier = Modifier
-            .size(56.dp)
+            .size(48.dp)
             .scale(scale)
             .onFocusChanged { onFocusChanged(it.isFocused) }
             .focusable()
@@ -594,8 +500,8 @@ private fun CircularIconButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused) focusedColor else Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(24.dp)
+                tint = if (isFocused) focusedColor else Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -607,31 +513,25 @@ private fun InfoCard(
     value: String
 ) {
     Surface(
-        color = Color.White.copy(alpha = 0.05f),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        color = Color.White.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
     ) {
         Column(
-            modifier = Modifier
-                .width(120.dp)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = label.uppercase(),
-                color = Color.White.copy(alpha = 0.4f),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 1.sp
-                )
+                color = Color.White.copy(alpha = 0.35f),
+                style = MaterialTheme.typography.labelSmall
             )
             Text(
                 text = value,
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium.copy(
+                color = Color.White.copy(alpha = 0.9f),
+                style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.SemiBold
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                )
             )
         }
     }
