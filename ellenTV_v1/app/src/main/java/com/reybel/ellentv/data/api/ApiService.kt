@@ -80,6 +80,15 @@ interface ApiService {
         @Query("format") format: String? = null
     ): PlayResponse
 
+    @GET("vod/all")
+    suspend fun searchVodAll(
+        @Query("q") query: String,
+        @Query("limit") limit: Int = 30,
+        @Query("offset") offset: Int = 0,
+        @Query("active_only") activeOnly: Boolean = true,
+        @Query("synced") synced: Boolean? = true
+    ): VodListResponse  // Ya tienes este modelo, reutilízalo
+
     // ---------- COLLECTIONS ----------
 
     @GET("collections")

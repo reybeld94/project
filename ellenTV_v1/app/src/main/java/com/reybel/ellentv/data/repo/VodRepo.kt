@@ -60,6 +60,22 @@ class VodRepo {
         )
     }
 
+    // Agrega esto dentro de class VodRepo:
+
+    suspend fun searchMovies(
+        query: String,
+        limit: Int = 30,
+        offset: Int = 0
+    ): VodListResponse {
+        return api.searchVodAll(
+            query = query,
+            limit = limit,
+            offset = offset,
+            activeOnly = true,
+            synced = true
+        )
+    }
+
     suspend fun fetchCollectionItems(
         collectionIdOrSlug: String,
         page: Int = 1,

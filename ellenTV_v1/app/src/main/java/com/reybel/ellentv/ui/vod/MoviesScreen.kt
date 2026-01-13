@@ -1,21 +1,32 @@
 package com.reybel.ellentv.ui.vod
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,14 +59,23 @@ import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
 import com.reybel.ellentv.ui.components.PosterSkeletonCard
 
+// Color de acento
+private val AccentColor = Color(0xFF00D9FF)
+
 @Composable
 fun MoviesScreen(
     ui: MoviesUiState,
+    searchState: SearchState,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlay: (vodId: String) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onSearchLoadMore: () -> Unit,
+    onSearchDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Error state
     if (ui.error != null) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -70,12 +90,24 @@ fun MoviesScreen(
         return
     }
 
+    // Search overlay state
+    var showSearchOverlay by remember { mutableStateOf(false) }
+    val searchButtonFocusRequester = remember { FocusRequester() }
+
+    // BackHandler para cerrar búsqueda
+    BackHandler(enabled = showSearchOverlay) {
+        showSearchOverlay = false
+        onSearchDismiss()
+    }
+
+    // Selected item state
     var selectedItem by remember { mutableStateOf<VodItem?>(null) }
-    BackHandler(enabled = selectedItem != null) {
+    BackHandler(enabled = selectedItem != null && !showSearchOverlay) {
         selectedItem = null
     }
 
-    if (selectedItem != null) {
+    // Show details screen if item selected
+    if (selectedItem != null && !showSearchOverlay) {
         MovieDetailsScreen(
             item = selectedItem ?: return,
             onPlay = onPlay,
@@ -116,90 +148,204 @@ fun MoviesScreen(
     val focusedCollection = ui.collections.getOrNull(focusedCollectionIndex)
     val nextCollection = ui.collections.getOrNull(focusedCollectionIndex + 1)
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = 20.dp, vertical = 18.dp)
-    ) {
-        // FOCUSED COLLECTION - Always on top
-        focusedCollection?.let { collection ->
-            CollectionRow(
-                title = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 1}" },
-                collection = collection,
-                onRequestMore = onRequestMore,
-                onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
-                onItemFocused = { item -> focusedItem = item },
-                onOpenDetails = { selectedItem = it },
-                onNavigateUp = {
-                    if (focusedCollectionIndex > 0) {
-                        focusedCollectionIndex--
-                    }
-                },
-                onNavigateDown = {
-                    if (focusedCollectionIndex < ui.collections.lastIndex) {
-                        focusedCollectionIndex++
-                    }
-                },
-                focusRequester = collectionFocusRequester
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // INFO PANEL - Fixed position below focused collection
-        MovieMetadataPanel(item = focusedItem)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // NEXT COLLECTION PREVIEW (dimmed, not focusable yet)
-        nextCollection?.let { collection ->
-            Text(
-                text = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 2}" },
-                color = Color.White.copy(alpha = 0.4f),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-                userScrollEnabled = false
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MAIN CONTENT - Wrapped in Box for overlay support
+    // ═══════════════════════════════════════════════════════════════════════════
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+        ) {
+            // ═══════════════════════════════════════════════════════════════════
+            // HEADER CON TÍTULO Y BOTÓN DE BÚSQUEDA
+            // ═══════════════════════════════════════════════════════════════════
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                itemsIndexed(
-                    collection.items.take(8),
-                    key = { _, item -> item.id }
-                ) { _, item ->
-                    // Dimmed preview cards - not focusable
-                    Box(
-                        modifier = Modifier
-                            .width(100.dp)
-                            .height(150.dp)
-                            .background(Color.White.copy(alpha = 0.05f))
-                    ) {
-                        item.posterUrl?.let { url ->
-                            OptimizedAsyncImage(
-                                url = url,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.5f)),
-                                contentScale = ContentScale.Crop,
-                                targetSizePx = 256
-                            )
+                Text(
+                    text = "Movies",
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+
+                SearchButton(
+                    focusRequester = searchButtonFocusRequester,
+                    onClick = { showSearchOverlay = true }
+                )
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // FOCUSED COLLECTION - Always on top
+            // ═══════════════════════════════════════════════════════════════════
+            focusedCollection?.let { collection ->
+                CollectionRow(
+                    title = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 1}" },
+                    collection = collection,
+                    onRequestMore = onRequestMore,
+                    onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
+                    onItemFocused = { item -> focusedItem = item },
+                    onOpenDetails = { selectedItem = it },
+                    onNavigateUp = {
+                        if (focusedCollectionIndex > 0) {
+                            focusedCollectionIndex--
+                        } else {
+                            // Si está en la primera colección, ir al botón de búsqueda
+                            searchButtonFocusRequester.requestFocus()
                         }
-                        // Dim overlay
+                    },
+                    onNavigateDown = {
+                        if (focusedCollectionIndex < ui.collections.lastIndex) {
+                            focusedCollectionIndex++
+                        }
+                    },
+                    focusRequester = collectionFocusRequester
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ═══════════════════════════════════════════════════════════════════
+            // INFO PANEL - Fixed position below focused collection
+            // ═══════════════════════════════════════════════════════════════════
+            MovieMetadataPanel(item = focusedItem)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ═══════════════════════════════════════════════════════════════════
+            // NEXT COLLECTION PREVIEW (dimmed, not focusable yet)
+            // ═══════════════════════════════════════════════════════════════════
+            nextCollection?.let { collection ->
+                Text(
+                    text = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 2}" },
+                    color = Color.White.copy(alpha = 0.4f),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    userScrollEnabled = false
+                ) {
+                    itemsIndexed(
+                        collection.items.take(8),
+                        key = { _, item -> item.id }
+                    ) { _, item ->
+                        // Dimmed preview cards - not focusable
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f))
-                        )
+                                .width(100.dp)
+                                .height(150.dp)
+                                .background(Color.White.copy(alpha = 0.05f))
+                        ) {
+                            item.posterUrl?.let { url ->
+                                OptimizedAsyncImage(
+                                    url = url,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.5f)),
+                                    contentScale = ContentScale.Crop,
+                                    targetSizePx = 256
+                                )
+                            }
+                            // Dim overlay
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // SEARCH OVERLAY
+        // ═══════════════════════════════════════════════════════════════════════
+        AnimatedVisibility(
+            visible = showSearchOverlay,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            SearchOverlay(
+                searchState = searchState,
+                onQueryChange = onSearchQueryChange,
+                onSearch = onSearch,
+                onSelectItem = { item ->
+                    showSearchOverlay = false
+                    selectedItem = item
+                },
+                onLoadMore = onSearchLoadMore,
+                onDismiss = {
+                    showSearchOverlay = false
+                    onSearchDismiss()
+                }
+            )
+        }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEARCH BUTTON
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SearchButton(
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused = interactionSource.collectIsFocusedAsState().value
+
+    val backgroundColor = if (isFocused) AccentColor else Color.White.copy(alpha = 0.1f)
+    val contentColor = if (isFocused) Color.Black else Color.White
+    val borderColor = if (isFocused) AccentColor else Color.White.copy(alpha = 0.2f)
+
+    Surface(
+        onClick = onClick,
+        color = backgroundColor,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .focusable(interactionSource = interactionSource)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = contentColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "Search",
+                color = contentColor,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Medium
+                )
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLLECTION ROW
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun CollectionRow(
@@ -273,6 +419,10 @@ private fun CollectionRow(
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVIE POSTER CARD
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun MoviePosterCard(
@@ -353,6 +503,10 @@ private fun MoviePosterCard(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVIE METADATA PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
 @Composable
 private fun MovieMetadataPanel(item: VodItem?) {
     val title = item?.displayTitle ?: ""
@@ -418,6 +572,10 @@ private fun MovieMetadataPanel(item: VodItem?) {
         )
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILITY EXTENSIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 private fun String.extractYearFromTitle(): String? {
     val match = Regex("(19|20)\\d{2}").find(this)

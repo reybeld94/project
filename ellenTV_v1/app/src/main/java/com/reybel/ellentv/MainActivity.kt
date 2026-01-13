@@ -172,6 +172,7 @@ fun TvHomeScreen(
     var bufferLevel by remember { mutableStateOf("Normal") }
 
     val moviesUi by moviesVm.ui.collectAsState()
+    val moviesSearchState by moviesVm.searchState.collectAsState()
     val seriesUi by seriesVm.ui.collectAsState()
 
     var vodLeftEdgeFocused by remember { mutableStateOf(false) }
@@ -810,6 +811,7 @@ fun TvHomeScreen(
             AppSection.MOVIES -> {
                 com.reybel.ellentv.ui.vod.MoviesScreen(
                     ui = moviesUi,
+                    searchState = moviesSearchState,
                     onRequestMore = { providerId, lastIdx -> moviesVm.loadMoreIfNeeded(providerId, lastIdx) },
                     onPlay = { vodId ->
                         scope.launch {
@@ -824,6 +826,10 @@ fun TvHomeScreen(
                         }
                     },
                     onLeftEdgeFocusChanged = { vodLeftEdgeFocused = it },
+                    onSearchQueryChange = { query -> moviesVm.updateSearchQuery(query) },
+                    onSearch = { moviesVm.performSearch() },
+                    onSearchLoadMore = { moviesVm.loadMoreSearchResults() },
+                    onSearchDismiss = { moviesVm.clearSearch() },
                     modifier = Modifier.fillMaxSize()
                 )
             }

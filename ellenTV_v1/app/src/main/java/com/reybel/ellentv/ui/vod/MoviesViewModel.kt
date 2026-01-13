@@ -13,9 +13,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.reybel.ellentv.ui.vod.SearchState
 
 private const val DEFAULT_PAGE_LIMIT = 30
 private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w780"
+// SEARCH STATE
+private val _searchState = MutableStateFlow(SearchState())
+val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
+private var currentSearchQuery: String = ""
+private var searchOffset: Int = 0
+private val searchLimit: Int = 30
+
+
 
 data class MoviesCollectionUi(
     val collectionId: String,
@@ -187,6 +197,118 @@ class MoviesViewModel(
             releaseDate = release,
             streamUrl = streamUrl
         )
+    }
+    // ═══════════════════════════════════════════════════════════════════════════
+// SEARCH FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+    fun updateSearchQuery(query: String) {
+        _searchState.update { it.copy(query = query) }
+    }
+
+    fun performSearch() {
+        val query = _searchState.value.query.trim()
+        if (query.isEmpty()) return
+
+        if (query != currentSearchQuery) {
+            currentSearchQuery = query
+            searchOffset = 0
+            _searchState.update {
+                it.copy(results = emptyList(), total = 0, hasSearched = false)
+            }
+        }
+
+        viewModelScope.launch {
+            _searchState.update { it.copy(isSearching = true, error = null) }
+
+            try {
+                val response = repo.searchMovies(query = query, limit = searchLimit, offset = 0)
+
+                // Convertir items a VodItem si es necesario
+                val items = response.items.map { item ->
+                    VodItem(
+                        id = item.id,
+                        name = item.name,
+                        poster = item.poster,
+                        streamIcon = item.streamIcon,
+                        customPosterUrl = item.customPosterUrl,
+                        tmdbStatus = item.tmdbStatus,
+                        tmdbTitle = item.tmdbTitle,
+                        tmdbId = item.tmdbId,
+                        tmdbVoteAverage = item.tmdbVoteAverage,
+                        overview = item.overview,
+                        releaseDate = item.releaseDate,
+                        genreNames = item.genreNames
+                    )
+                }
+
+                searchOffset = items.size
+
+                _searchState.update {
+                    it.copy(
+                        isSearching = false,
+                        results = items,
+                        total = response.total,
+                        hasSearched = true,
+                        error = null
+                    )
+                }
+            } catch (e: Exception) {
+                _searchState.update {
+                    it.copy(isSearching = false, hasSearched = true, error = e.message ?: "Search failed")
+                }
+            }
+        }
+    }
+
+    fun loadMoreSearchResults() {
+        val state = _searchState.value
+        if (state.isSearching) return
+        if (state.results.size >= state.total) return
+        if (currentSearchQuery.isEmpty()) return
+
+        viewModelScope.launch {
+            _searchState.update { it.copy(isSearching = true) }
+
+            try {
+                val response = repo.searchMovies(
+                    query = currentSearchQuery,
+                    limit = searchLimit,
+                    offset = searchOffset
+                )
+
+                val items = response.items.map { item ->
+                    VodItem(
+                        id = item.id,
+                        name = item.name,
+                        poster = item.poster,
+                        streamIcon = item.streamIcon,
+                        customPosterUrl = item.customPosterUrl,
+                        tmdbStatus = item.tmdbStatus,
+                        tmdbTitle = item.tmdbTitle,
+                        tmdbId = item.tmdbId,
+                        tmdbVoteAverage = item.tmdbVoteAverage,
+                        overview = item.overview,
+                        releaseDate = item.releaseDate,
+                        genreNames = item.genreNames
+                    )
+                }
+
+                searchOffset += items.size
+
+                _searchState.update {
+                    it.copy(isSearching = false, results = it.results + items, total = response.total)
+                }
+            } catch (e: Exception) {
+                _searchState.update { it.copy(isSearching = false) }
+            }
+        }
+    }
+
+    fun clearSearch() {
+        currentSearchQuery = ""
+        searchOffset = 0
+        _searchState.update { SearchState() }
     }
 }
 
