@@ -149,7 +149,7 @@ fun SearchOverlay(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(20.dp)
         ) {
             // ═══════════════════════════════════════════════════════════════════
             // HEADER
@@ -194,14 +194,14 @@ fun SearchOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // ═══════════════════════════════════════════════════════════════
                 // TECLADO (lado izquierdo)
                 // ═══════════════════════════════════════════════════════════════
                 Box(
                     modifier = Modifier
-                        .width(420.dp)
+                        .width(360.dp)
                         .fillMaxHeight()
                 ) {
                     TVKeyboard(
@@ -448,7 +448,7 @@ private fun SearchResultsGrid(
         // Grid de resultados
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(minSize = 140.dp),
+            columns = GridCells.Adaptive(minSize = 120.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 16.dp),
@@ -497,7 +497,7 @@ private fun SearchResultCard(
         border = BorderStroke(2.dp, borderColor),
         modifier = modifier
             .scale(cardScale)
-            .height(220.dp)
+            .height(190.dp)
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
@@ -529,7 +529,7 @@ private fun SearchResultCard(
                         url = imageUrl,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
-                        targetSizePx = 300
+                        targetSizePx = 240
                     )
                 } else {
                     Box(
