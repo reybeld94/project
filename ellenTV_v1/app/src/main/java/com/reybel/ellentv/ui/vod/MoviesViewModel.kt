@@ -220,23 +220,7 @@ class MoviesViewModel(
             try {
                 val response = repo.searchMovies(query = query, limit = searchLimit, offset = 0)
 
-                // Convertir items a VodItem si es necesario
-                val items = response.items.map { item ->
-                    VodItem(
-                        id = item.id,
-                        name = item.name,
-                        poster = item.poster,
-                        streamIcon = item.streamIcon,
-                        customPosterUrl = item.customPosterUrl,
-                        tmdbStatus = item.tmdbStatus,
-                        tmdbTitle = item.tmdbTitle,
-                        tmdbId = item.tmdbId,
-                        tmdbVoteAverage = item.tmdbVoteAverage,
-                        overview = item.overview,
-                        releaseDate = item.releaseDate,
-                        genreNames = item.genreNames
-                    )
-                }
+                val items = response.items
 
                 searchOffset = items.size
 
@@ -273,22 +257,7 @@ class MoviesViewModel(
                     offset = searchOffset
                 )
 
-                val items = response.items.map { item ->
-                    VodItem(
-                        id = item.id,
-                        name = item.name,
-                        poster = item.poster,
-                        streamIcon = item.streamIcon,
-                        customPosterUrl = item.customPosterUrl,
-                        tmdbStatus = item.tmdbStatus,
-                        tmdbTitle = item.tmdbTitle,
-                        tmdbId = item.tmdbId,
-                        tmdbVoteAverage = item.tmdbVoteAverage,
-                        overview = item.overview,
-                        releaseDate = item.releaseDate,
-                        genreNames = item.genreNames
-                    )
-                }
+                val items = response.items
 
                 searchOffset += items.size
 
