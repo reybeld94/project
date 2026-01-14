@@ -66,6 +66,9 @@ private val KeyBackgroundSearch = Color(0xFF00D9FF)
 private val KeyTextColor = Color.White
 private val KeyTextColorFocused = Color.Black
 private val AccentColor = Color(0xFF00D9FF)
+private val KeySize = 40.dp
+private val KeyHeight = 44.dp
+private val SpecialKeyHeight = 44.dp
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LAYOUTS DE TECLADO
@@ -150,9 +153,9 @@ fun TVKeyboard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════════════
         // CAMPO DE TEXTO (Display del query)
@@ -207,14 +210,14 @@ fun TVKeyboard(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // ═══════════════════════════════════════════════════════════════════════
         // FILAS DEL TECLADO
         // ═══════════════════════════════════════════════════════════════════════
         keyboardRows.forEachIndexed { rowIndex, row ->
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -279,7 +282,7 @@ fun TVKeyboard(
         Spacer(modifier = Modifier.height(4.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -290,7 +293,7 @@ fun TVKeyboard(
                 icon = Icons.Default.SpaceBar,
                 label = "Space",
                 focusRequester = spaceFocusRequester,
-                width = 160.dp,
+                width = 140.dp,
                 onClick = {
                     onValueChange(value + " ")
                 },
@@ -410,14 +413,14 @@ private fun KeyboardKey(
     val textColor = if (isFocused) KeyTextColorFocused else KeyTextColor
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.15f else 1f,
+        targetValue = if (isFocused) 1.1f else 1f,
         animationSpec = tween(100),
         label = "keyScale"
     )
 
     Box(
         modifier = modifier
-            .size((44 * scale).dp)
+            .size(KeySize)
             .scale(scale)
             .clip(RoundedCornerShape(8.dp))
             .background(backgroundColor)
@@ -491,7 +494,7 @@ private fun SpecialKey(
     val contentColor = if (isFocused) KeyTextColorFocused else KeyTextColor
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.08f else 1f,
+        targetValue = if (isFocused) 1.05f else 1f,
         animationSpec = tween(100),
         label = "specialKeyScale"
     )
@@ -499,7 +502,7 @@ private fun SpecialKey(
     Box(
         modifier = modifier
             .width(width)
-            .height(48.dp)
+            .height(SpecialKeyHeight)
             .scale(scale)
             .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
@@ -591,7 +594,7 @@ private fun SearchKey(
     }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused && enabled) 1.08f else 1f,
+        targetValue = if (isFocused && enabled) 1.05f else 1f,
         animationSpec = tween(100),
         label = "searchKeyScale"
     )
@@ -599,7 +602,7 @@ private fun SearchKey(
     Box(
         modifier = modifier
             .width(120.dp)
-            .height(48.dp)
+            .height(KeyHeight)
             .scale(scale)
             .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
@@ -646,7 +649,7 @@ private fun SearchKey(
         contentAlignment = Alignment.Center
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
