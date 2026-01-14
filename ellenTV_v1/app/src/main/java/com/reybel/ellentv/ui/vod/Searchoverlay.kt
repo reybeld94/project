@@ -201,7 +201,7 @@ fun SearchOverlay(
                 // ═══════════════════════════════════════════════════════════════
                 Box(
                     modifier = Modifier
-                        .width(360.dp)
+                        .width(420.dp)
                         .fillMaxHeight()
                 ) {
                     TVKeyboard(
