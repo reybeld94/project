@@ -155,9 +155,8 @@ fun TVKeyboard(
         val horizontalPadding = 12.dp
         val rowSpacing = 4.dp
         val specialSpacing = 6.dp
-        val edgePadding = 6.dp
         val maxKeysInRow = keyboardRows.maxOf { it.size }
-        val availableWidth = maxWidth - horizontalPadding * 2 - edgePadding * 2
+        val availableWidth = maxWidth - horizontalPadding * 2
         val computedKeySize = ((availableWidth - rowSpacing * (maxKeysInRow - 1)) / maxKeysInRow)
             .coerceIn(32.dp, 48.dp)
         val keySize = computedKeySize.coerceAtMost(DefaultKeySize)
@@ -237,9 +236,7 @@ fun TVKeyboard(
             keyboardRows.forEachIndexed { rowIndex, row ->
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(rowSpacing),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = edgePadding),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Centrar filas más cortas
@@ -305,9 +302,7 @@ fun TVKeyboard(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(specialSpacing),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = edgePadding),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Spacer(modifier = Modifier.weight(1f))
