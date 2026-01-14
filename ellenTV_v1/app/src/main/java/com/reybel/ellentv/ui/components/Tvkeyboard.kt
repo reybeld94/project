@@ -115,7 +115,8 @@ fun TVKeyboard(
     useQwertyLayout: Boolean = true,
     initialFocusRequester: FocusRequester? = null,
     onNavigateUp: () -> Unit = {}, // Para salir del teclado hacia arriba (resultados)
-    onNavigateDown: () -> Unit = {} // Para salir del teclado hacia abajo
+    onNavigateDown: () -> Unit = {}, // Para salir del teclado hacia abajo
+    onNavigateRight: () -> Unit = {} // Para salir del teclado hacia la derecha (resultados)
 ) {
     val keyboardRows = if (useQwertyLayout) KEYBOARD_ROWS_QWERTY else KEYBOARD_ROWS_ABC
 
@@ -282,6 +283,8 @@ fun TVKeyboard(
                                     NavigationDirection.RIGHT -> {
                                         if (colIndex < row.size - 1) {
                                             keyFocusRequesters[rowIndex][colIndex + 1].requestFocus()
+                                        } else {
+                                            onNavigateRight()
                                         }
                                     }
                                 }
@@ -397,7 +400,7 @@ fun TVKeyboard(
                             }
                             NavigationDirection.DOWN -> onNavigateDown()
                             NavigationDirection.LEFT -> clearFocusRequester.requestFocus()
-                            NavigationDirection.RIGHT -> { /* Nada */ }
+                            NavigationDirection.RIGHT -> onNavigateRight()
                         }
                     }
                 )
