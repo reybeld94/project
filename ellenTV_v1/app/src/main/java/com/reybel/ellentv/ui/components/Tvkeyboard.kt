@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,7 +67,7 @@ private val KeyBackgroundSearch = Color(0xFF00D9FF)
 private val KeyTextColor = Color.White
 private val KeyTextColorFocused = Color.Black
 private val AccentColor = Color(0xFF00D9FF)
-private val KeySize = 40.dp
+private val DefaultKeySize = 40.dp
 private val KeyHeight = 44.dp
 private val SpecialKeyHeight = 44.dp
 
@@ -150,237 +151,259 @@ fun TVKeyboard(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        // ═══════════════════════════════════════════════════════════════════════
-        // CAMPO DE TEXTO (Display del query)
-        // ═══════════════════════════════════════════════════════════════════════
-        Box(
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val horizontalPadding = 12.dp
+        val rowSpacing = 4.dp
+        val specialSpacing = 6.dp
+        val maxKeysInRow = keyboardRows.maxOf { it.size }
+        val availableWidth = maxWidth - horizontalPadding * 2
+        val computedKeySize = ((availableWidth - rowSpacing * (maxKeysInRow - 1)) / maxKeysInRow)
+            .coerceIn(32.dp, 48.dp)
+        val keySize = computedKeySize.coerceAtMost(DefaultKeySize)
+
+        val specialRowFixedWidth = 140.dp + 56.dp + 56.dp + 120.dp + specialSpacing * 3
+        val specialScale = (availableWidth / specialRowFixedWidth).coerceAtMost(1f)
+        val spaceKeyWidth = 140.dp * specialScale
+        val backspaceKeyWidth = 56.dp * specialScale
+        val clearKeyWidth = 56.dp * specialScale
+        val searchKeyWidth = 120.dp * specialScale
+
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1E1E1E))
-                .border(2.dp, AccentColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = horizontalPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+            // ═══════════════════════════════════════════════════════════════════════
+            // CAMPO DE TEXTO (Display del query)
+            // ═══════════════════════════════════════════════════════════════════════
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E1E1E))
+                    .border(2.dp, AccentColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = AccentColor,
-                    modifier = Modifier.size(24.dp)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                if (value.isEmpty()) {
-                    Text(
-                        text = placeholder,
-                        color = Color.White.copy(alpha = 0.4f),
-                        style = MaterialTheme.typography.bodyLarge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = AccentColor,
+                        modifier = Modifier.size(24.dp)
                     )
-                } else {
-                    Text(
-                        text = value,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontWeight = FontWeight.Medium
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = Color.White.copy(alpha = 0.4f),
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                    )
-                }
+                    } else {
+                        Text(
+                            text = value,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
 
-                // Cursor parpadeante
-                if (value.isNotEmpty()) {
-                    Text(
-                        text = "│",
-                        color = AccentColor,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    // Cursor parpadeante
+                    if (value.isNotEmpty()) {
+                        Text(
+                            text = "│",
+                            color = AccentColor,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FILAS DEL TECLADO
-        // ═══════════════════════════════════════════════════════════════════════
-        keyboardRows.forEachIndexed { rowIndex, row ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Centrar filas más cortas
-                if (row.size < 10) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+            // ═══════════════════════════════════════════════════════════════════════
+            // FILAS DEL TECLADO
+            // ═══════════════════════════════════════════════════════════════════════
+            keyboardRows.forEachIndexed { rowIndex, row ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rowSpacing),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Centrar filas más cortas
+                    if (row.size < maxKeysInRow) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
 
-                row.forEachIndexed { colIndex, key ->
-                    KeyboardKey(
-                        text = key,
-                        focusRequester = keyFocusRequesters[rowIndex][colIndex],
-                        onClick = {
-                            onValueChange(value + key.lowercase())
-                        },
-                        onNavigate = { direction ->
-                            when (direction) {
-                                NavigationDirection.UP -> {
-                                    if (rowIndex == 0) {
-                                        onNavigateUp()
-                                    } else {
-                                        // Ir a la fila anterior
-                                        val targetRow = rowIndex - 1
-                                        val targetCol = colIndex.coerceAtMost(keyboardRows[targetRow].size - 1)
-                                        keyFocusRequesters[targetRow][targetCol].requestFocus()
+                    row.forEachIndexed { colIndex, key ->
+                        KeyboardKey(
+                            text = key,
+                            focusRequester = keyFocusRequesters[rowIndex][colIndex],
+                            size = keySize,
+                            onClick = {
+                                onValueChange(value + key.lowercase())
+                            },
+                            onNavigate = { direction ->
+                                when (direction) {
+                                    NavigationDirection.UP -> {
+                                        if (rowIndex == 0) {
+                                            onNavigateUp()
+                                        } else {
+                                            // Ir a la fila anterior
+                                            val targetRow = rowIndex - 1
+                                            val targetCol = colIndex.coerceAtMost(keyboardRows[targetRow].size - 1)
+                                            keyFocusRequesters[targetRow][targetCol].requestFocus()
+                                        }
                                     }
-                                }
-                                NavigationDirection.DOWN -> {
-                                    if (rowIndex == keyboardRows.size - 1) {
-                                        // Ir a las teclas especiales
-                                        spaceFocusRequester.requestFocus()
-                                    } else {
-                                        val targetRow = rowIndex + 1
-                                        val targetCol = colIndex.coerceAtMost(keyboardRows[targetRow].size - 1)
-                                        keyFocusRequesters[targetRow][targetCol].requestFocus()
+                                    NavigationDirection.DOWN -> {
+                                        if (rowIndex == keyboardRows.size - 1) {
+                                            // Ir a las teclas especiales
+                                            spaceFocusRequester.requestFocus()
+                                        } else {
+                                            val targetRow = rowIndex + 1
+                                            val targetCol = colIndex.coerceAtMost(keyboardRows[targetRow].size - 1)
+                                            keyFocusRequesters[targetRow][targetCol].requestFocus()
+                                        }
                                     }
-                                }
-                                NavigationDirection.LEFT -> {
-                                    if (colIndex > 0) {
-                                        keyFocusRequesters[rowIndex][colIndex - 1].requestFocus()
+                                    NavigationDirection.LEFT -> {
+                                        if (colIndex > 0) {
+                                            keyFocusRequesters[rowIndex][colIndex - 1].requestFocus()
+                                        }
                                     }
-                                }
-                                NavigationDirection.RIGHT -> {
-                                    if (colIndex < row.size - 1) {
-                                        keyFocusRequesters[rowIndex][colIndex + 1].requestFocus()
+                                    NavigationDirection.RIGHT -> {
+                                        if (colIndex < row.size - 1) {
+                                            keyFocusRequesters[rowIndex][colIndex + 1].requestFocus()
+                                        }
                                     }
                                 }
                             }
-                        }
-                    )
-                }
+                        )
+                    }
 
-                if (row.size < 10) {
-                    Spacer(modifier = Modifier.weight(1f))
+                    if (row.size < maxKeysInRow) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
-        }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // FILA DE TECLAS ESPECIALES
-        // ═══════════════════════════════════════════════════════════════════════
-        Spacer(modifier = Modifier.height(4.dp))
+            // ═══════════════════════════════════════════════════════════════════════
+            // FILA DE TECLAS ESPECIALES
+            // ═══════════════════════════════════════════════════════════════════════
+            Spacer(modifier = Modifier.height(4.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(specialSpacing),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
 
-            // SPACE
-            SpecialKey(
-                icon = Icons.Default.SpaceBar,
-                label = "Space",
-                focusRequester = spaceFocusRequester,
-                width = 140.dp,
-                onClick = {
-                    onValueChange(value + " ")
-                },
-                onNavigate = { direction ->
-                    when (direction) {
-                        NavigationDirection.UP -> {
-                            // Ir a la última fila del teclado
-                            val lastRow = keyboardRows.size - 1
-                            keyFocusRequesters[lastRow][0].requestFocus()
+                // SPACE
+                SpecialKey(
+                    icon = Icons.Default.SpaceBar,
+                    label = "Space",
+                    focusRequester = spaceFocusRequester,
+                    width = spaceKeyWidth,
+                    onClick = {
+                        onValueChange(value + " ")
+                    },
+                    onNavigate = { direction ->
+                        when (direction) {
+                            NavigationDirection.UP -> {
+                                // Ir a la última fila del teclado
+                                val lastRow = keyboardRows.size - 1
+                                keyFocusRequesters[lastRow][0].requestFocus()
+                            }
+                            NavigationDirection.DOWN -> onNavigateDown()
+                            NavigationDirection.LEFT -> { /* Nada */ }
+                            NavigationDirection.RIGHT -> backspaceFocusRequester.requestFocus()
                         }
-                        NavigationDirection.DOWN -> onNavigateDown()
-                        NavigationDirection.LEFT -> { /* Nada */ }
-                        NavigationDirection.RIGHT -> backspaceFocusRequester.requestFocus()
                     }
-                }
-            )
+                )
 
-            // BACKSPACE
-            SpecialKey(
-                icon = Icons.AutoMirrored.Filled.Backspace,
-                label = null,
-                focusRequester = backspaceFocusRequester,
-                onClick = {
-                    if (value.isNotEmpty()) {
-                        onValueChange(value.dropLast(1))
-                    }
-                },
-                onNavigate = { direction ->
-                    when (direction) {
-                        NavigationDirection.UP -> {
-                            val lastRow = keyboardRows.size - 1
-                            val midCol = keyboardRows[lastRow].size / 2
-                            keyFocusRequesters[lastRow][midCol].requestFocus()
+                // BACKSPACE
+                SpecialKey(
+                    icon = Icons.AutoMirrored.Filled.Backspace,
+                    label = null,
+                    focusRequester = backspaceFocusRequester,
+                    width = backspaceKeyWidth,
+                    onClick = {
+                        if (value.isNotEmpty()) {
+                            onValueChange(value.dropLast(1))
                         }
-                        NavigationDirection.DOWN -> onNavigateDown()
-                        NavigationDirection.LEFT -> spaceFocusRequester.requestFocus()
-                        NavigationDirection.RIGHT -> clearFocusRequester.requestFocus()
-                    }
-                }
-            )
-
-            // CLEAR
-            SpecialKey(
-                icon = Icons.Default.Clear,
-                label = null,
-                focusRequester = clearFocusRequester,
-                onClick = {
-                    onValueChange("")
-                },
-                onNavigate = { direction ->
-                    when (direction) {
-                        NavigationDirection.UP -> {
-                            val lastRow = keyboardRows.size - 1
-                            val lastCol = keyboardRows[lastRow].size - 1
-                            keyFocusRequesters[lastRow][lastCol.coerceAtMost(keyboardRows[lastRow].size - 1)].requestFocus()
+                    },
+                    onNavigate = { direction ->
+                        when (direction) {
+                            NavigationDirection.UP -> {
+                                val lastRow = keyboardRows.size - 1
+                                val midCol = keyboardRows[lastRow].size / 2
+                                keyFocusRequesters[lastRow][midCol].requestFocus()
+                            }
+                            NavigationDirection.DOWN -> onNavigateDown()
+                            NavigationDirection.LEFT -> spaceFocusRequester.requestFocus()
+                            NavigationDirection.RIGHT -> clearFocusRequester.requestFocus()
                         }
-                        NavigationDirection.DOWN -> onNavigateDown()
-                        NavigationDirection.LEFT -> backspaceFocusRequester.requestFocus()
-                        NavigationDirection.RIGHT -> searchFocusRequester.requestFocus()
                     }
-                }
-            )
+                )
 
-            // SEARCH
-            SearchKey(
-                focusRequester = searchFocusRequester,
-                enabled = value.isNotEmpty(),
-                onClick = {
-                    if (value.isNotEmpty()) {
-                        onSearch()
-                    }
-                },
-                onNavigate = { direction ->
-                    when (direction) {
-                        NavigationDirection.UP -> {
-                            val lastRow = keyboardRows.size - 1
-                            val lastCol = keyboardRows[lastRow].size - 1
-                            keyFocusRequesters[lastRow][lastCol].requestFocus()
+                // CLEAR
+                SpecialKey(
+                    icon = Icons.Default.Clear,
+                    label = null,
+                    focusRequester = clearFocusRequester,
+                    width = clearKeyWidth,
+                    onClick = {
+                        onValueChange("")
+                    },
+                    onNavigate = { direction ->
+                        when (direction) {
+                            NavigationDirection.UP -> {
+                                val lastRow = keyboardRows.size - 1
+                                val lastCol = keyboardRows[lastRow].size - 1
+                                keyFocusRequesters[lastRow][lastCol.coerceAtMost(keyboardRows[lastRow].size - 1)].requestFocus()
+                            }
+                            NavigationDirection.DOWN -> onNavigateDown()
+                            NavigationDirection.LEFT -> backspaceFocusRequester.requestFocus()
+                            NavigationDirection.RIGHT -> searchFocusRequester.requestFocus()
                         }
-                        NavigationDirection.DOWN -> onNavigateDown()
-                        NavigationDirection.LEFT -> clearFocusRequester.requestFocus()
-                        NavigationDirection.RIGHT -> { /* Nada */ }
                     }
-                }
-            )
+                )
 
-            Spacer(modifier = Modifier.weight(1f))
+                // SEARCH
+                SearchKey(
+                    focusRequester = searchFocusRequester,
+                    enabled = value.isNotEmpty(),
+                    width = searchKeyWidth,
+                    onClick = {
+                        if (value.isNotEmpty()) {
+                            onSearch()
+                        }
+                    },
+                    onNavigate = { direction ->
+                        when (direction) {
+                            NavigationDirection.UP -> {
+                                val lastRow = keyboardRows.size - 1
+                                val lastCol = keyboardRows[lastRow].size - 1
+                                keyFocusRequesters[lastRow][lastCol].requestFocus()
+                            }
+                            NavigationDirection.DOWN -> onNavigateDown()
+                            NavigationDirection.LEFT -> clearFocusRequester.requestFocus()
+                            NavigationDirection.RIGHT -> { /* Nada */ }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -397,6 +420,7 @@ private enum class NavigationDirection {
 private fun KeyboardKey(
     text: String,
     focusRequester: FocusRequester,
+    size: Dp,
     onClick: () -> Unit,
     onNavigate: (NavigationDirection) -> Unit,
     modifier: Modifier = Modifier
@@ -420,7 +444,7 @@ private fun KeyboardKey(
 
     Box(
         modifier = modifier
-            .size(KeySize)
+            .size(size)
             .scale(scale)
             .clip(RoundedCornerShape(8.dp))
             .background(backgroundColor)
@@ -570,6 +594,7 @@ private fun SpecialKey(
 private fun SearchKey(
     focusRequester: FocusRequester,
     enabled: Boolean,
+    width: Dp,
     onClick: () -> Unit,
     onNavigate: (NavigationDirection) -> Unit,
     modifier: Modifier = Modifier
@@ -601,7 +626,7 @@ private fun SearchKey(
 
     Box(
         modifier = modifier
-            .width(120.dp)
+            .width(width)
             .height(KeyHeight)
             .scale(scale)
             .clip(RoundedCornerShape(10.dp))
