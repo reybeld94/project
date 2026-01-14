@@ -79,10 +79,10 @@ fun MovieDetailsScreen(
         ?.distinct()
         ?.joinToString(" • ")
     val year = item.releaseDate?.extractYearFromDate() ?: item.displayTitle.extractYearFromTitle()
-    val overview = item.overview?.takeIf { it.isNotBlank() } ?: "No description available."
+    val overview = item.resolvedDescription()?.takeIf { it.isNotBlank() } ?: "No description available."
     val rating = item.tmdbVoteAverage?.let { String.format("%.1f", it) }
     val language = item.tmdbOriginalLanguage?.uppercase()
-    val cast = item.tmdbCast?.take(4)?.joinToString(", ")
+    val cast = item.resolvedCast()?.take(4)?.joinToString(", ")
 
     // Animación de entrada
     var visible by remember { mutableStateOf(false) }
@@ -544,4 +544,17 @@ private fun String.extractYearFromTitle(): String? {
 
 private fun String.extractYearFromDate(): String? {
     return takeIf { length >= 4 }?.substring(0, 4)
+}
+
+private fun VodItem.resolvedDescription(): String? {
+    return listOfNotNull(overview, description, desc, shortDesc, longDesc)
+        .firstOrNull { it.isNotBlank() }
+        ?.trim()
+}
+
+private fun VodItem.resolvedCast(): List<String>? {
+    return (tmdbCast ?: cast)
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.ifEmpty { null }
 }

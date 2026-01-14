@@ -223,6 +223,12 @@ fun SearchOverlay(
                                 focusArea = FocusArea.RESULTS
                                 firstResultFocusRequester.requestFocus()
                             }
+                        },
+                        onNavigateRight = {
+                            if (searchState.results.isNotEmpty()) {
+                                focusArea = FocusArea.RESULTS
+                                firstResultFocusRequester.requestFocus()
+                            }
                         }
                     )
                 }

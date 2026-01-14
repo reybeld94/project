@@ -320,6 +320,17 @@ private fun SearchButton(
         modifier = modifier
             .focusRequester(focusRequester)
             .focusable(interactionSource = interactionSource)
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.Enter, Key.DirectionCenter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -518,9 +529,9 @@ private fun MovieMetadataPanel(item: VodItem?) {
         ?.distinct()
         ?.joinToString(" • ")
         ?.takeIf { it.isNotBlank() }
-    val synopsis = item?.overview?.takeIf { it.isNotBlank() } ?: "No description available."
+    val synopsis = item?.resolvedDescription()?.takeIf { it.isNotBlank() } ?: "No description available."
     val rating = item?.tmdbVoteAverage?.let { String.format("%.1f", it) }
-    val cast = item?.tmdbCast?.take(3)?.joinToString(", ")
+    val cast = item?.resolvedCast()?.take(3)?.joinToString(", ")
 
     Column(
         modifier = Modifier
@@ -584,4 +595,17 @@ private fun String.extractYearFromTitle(): String? {
 
 private fun String.extractYearFromDate(): String? {
     return takeIf { length >= 4 }?.substring(0, 4)
+}
+
+private fun VodItem.resolvedDescription(): String? {
+    return listOfNotNull(overview, description, desc, shortDesc, longDesc)
+        .firstOrNull { it.isNotBlank() }
+        ?.trim()
+}
+
+private fun VodItem.resolvedCast(): List<String>? {
+    return (tmdbCast ?: cast)
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.ifEmpty { null }
 }
