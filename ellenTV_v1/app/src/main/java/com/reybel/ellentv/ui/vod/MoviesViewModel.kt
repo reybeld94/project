@@ -220,7 +220,7 @@ class MoviesViewModel(
             try {
                 val response = repo.searchMovies(query = query, limit = searchLimit, offset = 0)
 
-                val items = response.items
+                val items = enrichSearchResults(response.items)
 
                 searchOffset = items.size
 
@@ -257,7 +257,7 @@ class MoviesViewModel(
                     offset = searchOffset
                 )
 
-                val items = response.items
+                val items = enrichSearchResults(response.items)
 
                 searchOffset += items.size
 
@@ -282,3 +282,59 @@ private data class ParsedTmdbCollection(
     val totalResults: Int,
     val totalPages: Int
 )
+
+private fun MoviesViewModel.enrichSearchResults(items: List<VodItem>): List<VodItem> {
+    if (items.isEmpty()) return items
+    val collectionItems = ui.value.collections.flatMap { it.items }
+    if (collectionItems.isEmpty()) return items
+    val collectionById = collectionItems.associateBy { it.id }
+    return items.map { item ->
+        val fallback = collectionById[item.id] ?: return@map item
+        item.mergeWithFallback(fallback)
+    }
+}
+
+private fun VodItem.mergeWithFallback(fallback: VodItem): VodItem {
+    return copy(
+        normalizedName = normalizedName ?: fallback.normalizedName,
+        poster = poster ?: fallback.poster,
+        customPosterUrl = customPosterUrl ?: fallback.customPosterUrl,
+        streamIcon = streamIcon ?: fallback.streamIcon,
+        categoryExtId = categoryExtId ?: fallback.categoryExtId,
+        tmdbStatus = tmdbStatus ?: fallback.tmdbStatus,
+        tmdbTitle = tmdbTitle ?: fallback.tmdbTitle,
+        tmdbId = tmdbId ?: fallback.tmdbId,
+        tmdbVoteAverage = tmdbVoteAverage ?: fallback.tmdbVoteAverage,
+        tmdbOriginalLanguage = tmdbOriginalLanguage ?: fallback.tmdbOriginalLanguage,
+        tmdbCast = tmdbCast ?: fallback.tmdbCast,
+        cast = cast ?: fallback.cast,
+        containerExtension = containerExtension ?: fallback.containerExtension,
+        overview = overview ?: fallback.overview,
+        description = description ?: fallback.description,
+        desc = desc ?: fallback.desc,
+        shortDesc = shortDesc ?: fallback.shortDesc,
+        longDesc = longDesc ?: fallback.longDesc,
+        genreNames = genreNames ?: fallback.genreNames,
+        releaseDate = releaseDate ?: fallback.releaseDate,
+        backdropPath = backdropPath ?: fallback.backdropPath,
+        backdrop = backdrop ?: fallback.backdrop,
+        streamUrl = streamUrl ?: fallback.streamUrl
+    ).withNonBlankFallbacks(fallback)
+}
+
+private fun VodItem.withNonBlankFallbacks(fallback: VodItem): VodItem {
+    return copy(
+        name = name.ifBlank { fallback.name },
+        tmdbTitle = tmdbTitle?.takeIf { it.isNotBlank() } ?: fallback.tmdbTitle,
+        overview = overview?.takeIf { it.isNotBlank() } ?: fallback.overview,
+        description = description?.takeIf { it.isNotBlank() } ?: fallback.description,
+        desc = desc?.takeIf { it.isNotBlank() } ?: fallback.desc,
+        shortDesc = shortDesc?.takeIf { it.isNotBlank() } ?: fallback.shortDesc,
+        longDesc = longDesc?.takeIf { it.isNotBlank() } ?: fallback.longDesc,
+        releaseDate = releaseDate?.takeIf { it.isNotBlank() } ?: fallback.releaseDate,
+        tmdbOriginalLanguage = tmdbOriginalLanguage?.takeIf { it.isNotBlank() } ?: fallback.tmdbOriginalLanguage,
+        genreNames = genreNames?.takeIf { it.isNotEmpty() } ?: fallback.genreNames,
+        tmdbCast = tmdbCast?.takeIf { it.isNotEmpty() } ?: fallback.tmdbCast,
+        cast = cast?.takeIf { it.isNotEmpty() } ?: fallback.cast
+    )
+}
