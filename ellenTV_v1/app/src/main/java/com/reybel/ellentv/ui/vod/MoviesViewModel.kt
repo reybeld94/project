@@ -13,14 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.reybel.ellentv.ui.vod.SearchState
-
 private const val DEFAULT_PAGE_LIMIT = 30
 private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w780"
-// SEARCH STATE
-private val _searchState = MutableStateFlow(SearchState())
-val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
-
 private var currentSearchQuery: String = ""
 private var searchOffset: Int = 0
 private val searchLimit: Int = 30
@@ -52,6 +46,8 @@ class MoviesViewModel(
 
     private val _ui = MutableStateFlow(MoviesUiState())
     val ui: StateFlow<MoviesUiState> = _ui.asStateFlow()
+    private val _searchState = MutableStateFlow(SearchState())
+    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
