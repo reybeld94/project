@@ -121,6 +121,8 @@ fun MoviesScreen(
     var focusedItem by remember { mutableStateOf<VodItem?>(null) }
     val collectionFocusRequester = remember { FocusRequester() }
     var initialFocusRequested by remember { mutableStateOf(false) }
+    val focusedIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    val scrollIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
     // Initialize with first collection's first item
     LaunchedEffect(ui.collections) {
@@ -186,6 +188,8 @@ fun MoviesScreen(
             // FOCUSED COLLECTION - Always on top
             // ═══════════════════════════════════════════════════════════════════
             focusedCollection?.let { collection ->
+                val collectionFocusIndex = focusedIndexByCollection.value[collection.collectionId] ?: 0
+                val collectionScrollIndex = scrollIndexByCollection.value[collection.collectionId] ?: collectionFocusIndex
                 CollectionRow(
                     title = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 1}" },
                     collection = collection,
@@ -206,7 +210,20 @@ fun MoviesScreen(
                             focusedCollectionIndex++
                         }
                     },
-                    focusRequester = collectionFocusRequester
+                    focusRequester = collectionFocusRequester,
+                    focusRequesterIndex = collectionFocusIndex,
+                    initialFocusedIndex = collectionFocusIndex,
+                    initialScrollIndex = collectionScrollIndex,
+                    onFocusedIndexChange = { newIndex ->
+                        focusedIndexByCollection.value = focusedIndexByCollection.value
+                            .toMutableMap()
+                            .apply { put(collection.collectionId, newIndex) }
+                    },
+                    onScrollIndexChange = { newIndex ->
+                        scrollIndexByCollection.value = scrollIndexByCollection.value
+                            .toMutableMap()
+                            .apply { put(collection.collectionId, newIndex) }
+                    }
                 )
             }
 
@@ -368,7 +385,12 @@ private fun CollectionRow(
     onOpenDetails: (VodItem) -> Unit,
     onNavigateUp: () -> Unit,
     onNavigateDown: () -> Unit,
-    focusRequester: FocusRequester
+    focusRequester: FocusRequester,
+    focusRequesterIndex: Int,
+    initialFocusedIndex: Int,
+    initialScrollIndex: Int,
+    onFocusedIndexChange: (Int) -> Unit,
+    onScrollIndexChange: (Int) -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -388,8 +410,17 @@ private fun CollectionRow(
             )
         }
 
-        val rowState = rememberLazyListState()
-        var focusedIndex by remember(collection.collectionId) { mutableIntStateOf(0) }
+        val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
+        var focusedIndex by remember(collection.collectionId) { mutableIntStateOf(initialFocusedIndex) }
+        val targetFocusIndex = remember(collection.items.size, focusRequesterIndex) {
+            if (collection.items.isEmpty()) 0 else focusRequesterIndex.coerceIn(0, collection.items.lastIndex)
+        }
+
+        LaunchedEffect(collection.items.size) {
+            if (collection.items.isNotEmpty()) {
+                focusedIndex = focusedIndex.coerceIn(0, collection.items.lastIndex)
+            }
+        }
 
         LaunchedEffect(focusedIndex, collection.items.size) {
             if (collection.items.isNotEmpty()) {
@@ -400,6 +431,11 @@ private fun CollectionRow(
         LaunchedEffect(rowState, collection.items.size) {
             snapshotFlow { rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
                 .collect { lastIdx -> onRequestMore(collection.collectionId, lastIdx) }
+        }
+
+        LaunchedEffect(rowState) {
+            snapshotFlow { rowState.firstVisibleItemIndex }
+                .collect { index -> onScrollIndexChange(index) }
         }
 
         LazyRow(
@@ -419,11 +455,12 @@ private fun CollectionRow(
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
                         onFocused = {
                             focusedIndex = itemIndex
+                            onFocusedIndexChange(itemIndex)
                             onItemFocused(item)
                         },
                         onNavigateUp = onNavigateUp,
                         onNavigateDown = onNavigateDown,
-                        modifier = if (itemIndex == 0) Modifier.focusRequester(focusRequester) else Modifier
+                        modifier = if (itemIndex == targetFocusIndex) Modifier.focusRequester(focusRequester) else Modifier
                     )
                 }
             }
