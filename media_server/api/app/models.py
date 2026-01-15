@@ -553,3 +553,66 @@ class SeriesItem(Base):
     tmdb_backdrop_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     tmdb_raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class Season(Base):
+    __tablename__ = "seasons"
+    __table_args__ = (UniqueConstraint("series_id", "season_number", name="uq_seasons_series_season"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    series_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("series_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    series = relationship("SeriesItem", backref="seasons", lazy="joined")
+
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cover: Mapped[str | None] = mapped_column(String(800), nullable=True)
+    episode_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    air_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    overview: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    poster_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    is_synced: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class Episode(Base):
+    __tablename__ = "episodes"
+    __table_args__ = (
+        UniqueConstraint("season_id", "provider_episode_id", name="uq_episodes_season_providerid"),
+        UniqueConstraint("season_id", "episode_number", name="uq_episodes_season_epnum"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    season_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("seasons.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    season = relationship("Season", backref="episodes", lazy="joined")
+
+    provider_episode_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    episode_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    container_extension: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    duration_secs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    info_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    air_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    overview: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    still_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vote_average: Mapped[float | None] = mapped_column(Integer, nullable=True)
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

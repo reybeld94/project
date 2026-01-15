@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_
 from app.deps import get_db
-from app.models import Provider, Category, SeriesItem
+from app.models import Provider, Category, SeriesItem, Season, Episode
 from app.schemas import SeriesItemUpdate
 from app.xtream_client import xtream_get
 from sqlalchemy.exc import IntegrityError
@@ -82,19 +84,188 @@ def series_info(series_id: str, db: Session = Depends(get_db)):
     return {"id": str(s.id), "provider_series_id": s.provider_series_id, "info": info}
 
 
-@router.get("/{series_id}/seasons")
-def series_seasons(series_id: int, db=Depends(get_db)):
-    s = db.query(SeriesItem).filter(SeriesItem.id == series_id).first()
+@router.post("/{series_id}/sync_seasons")
+def sync_series_seasons(series_id: str, db: Session = Depends(get_db)):
+    """
+    Sincroniza temporadas y episodios de una serie desde el proveedor Xtream
+    y los guarda en la base de datos local.
+    """
+    s = db.get(SeriesItem, series_id)
     if not s:
         raise HTTPException(status_code=404, detail="Series not found")
 
-    p = db.query(Provider).filter(Provider.id == s.provider_id).first()
+    p = db.get(Provider, s.provider_id)
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    xt = XtreamClient(p.base_url, p.username, p.password)
+    try:
+        raw = xtream_get(
+            p.base_url,
+            p.username,
+            p.password,
+            "get_series_info",
+            series_id=s.provider_series_id,
+        ) or {}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Error fetching from provider: {exc}") from exc
 
-    raw = xt.get_series_info(series_id=s.provider_series_id) or {}
+    seasons_raw = raw.get("seasons") or []
+    episodes_raw = raw.get("episodes") or {}
+
+    now = datetime.utcnow()
+    seasons_synced = 0
+    episodes_synced = 0
+
+    for sea in seasons_raw:
+        sn = sea.get("season_number")
+        if sn is None:
+            continue
+
+        existing_season = db.execute(
+            select(Season).where(Season.series_id == s.id, Season.season_number == sn)
+        ).scalar_one_or_none()
+
+        if existing_season:
+            season = existing_season
+            season.name = sea.get("name") or f"Season {sn}"
+            season.cover = sea.get("cover") or sea.get("cover_big")
+            season.air_date = _parse_date(sea.get("air_date"))
+            season.updated_at = now
+        else:
+            season = Season(
+                series_id=s.id,
+                season_number=sn,
+                name=sea.get("name") or f"Season {sn}",
+                cover=sea.get("cover") or sea.get("cover_big"),
+                air_date=_parse_date(sea.get("air_date")),
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(season)
+            db.flush()
+            seasons_synced += 1
+
+        key = str(sn)
+        eps = episodes_raw.get(key) or episodes_raw.get(sn) or []
+
+        for ep in eps:
+            ep_id = ep.get("id") or ep.get("episode_id")
+            ep_num = ep.get("episode_num") or ep.get("episode_number")
+
+            if ep_id is None or ep_num is None:
+                continue
+
+            existing_ep = db.execute(
+                select(Episode).where(
+                    Episode.season_id == season.id,
+                    Episode.provider_episode_id == int(ep_id),
+                )
+            ).scalar_one_or_none()
+
+            duration_value = ep.get("duration_secs") or ep.get("duration")
+
+            if existing_ep:
+                existing_ep.title = ep.get("title") or ep.get("name") or f"Episode {ep_num}"
+                existing_ep.episode_number = int(ep_num)
+                existing_ep.container_extension = ep.get("container_extension") or ep.get("container")
+                existing_ep.duration_secs = _coerce_int(duration_value)
+                existing_ep.info_json = ep
+                existing_ep.updated_at = now
+            else:
+                new_ep = Episode(
+                    season_id=season.id,
+                    provider_episode_id=int(ep_id),
+                    episode_number=int(ep_num),
+                    title=ep.get("title") or ep.get("name") or f"Episode {ep_num}",
+                    container_extension=ep.get("container_extension") or ep.get("container"),
+                    duration_secs=_coerce_int(duration_value),
+                    info_json=ep,
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(new_ep)
+                episodes_synced += 1
+
+        season.episode_count = len(eps)
+        season.is_synced = True
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "series_id": str(s.id),
+        "seasons_synced": seasons_synced,
+        "episodes_synced": episodes_synced,
+    }
+
+
+@router.get("/{series_id}/seasons")
+def series_seasons(series_id: str, force_refresh: bool = False, db: Session = Depends(get_db)):
+    """
+    Obtiene temporadas y episodios de una serie.
+    - Si existen en DB local, los devuelve de ahí (rápido)
+    - Si no existen o force_refresh=True, los obtiene del proveedor
+    """
+    s = db.get(SeriesItem, series_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Series not found")
+
+    p = db.get(Provider, s.provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    if not force_refresh:
+        local_seasons = db.execute(
+            select(Season).where(Season.series_id == s.id).order_by(Season.season_number.asc())
+        ).scalars().all()
+
+        if local_seasons:
+            seasons_out = []
+            for sea in local_seasons:
+                eps = db.execute(
+                    select(Episode)
+                    .where(Episode.season_id == sea.id)
+                    .order_by(Episode.episode_number.asc())
+                ).scalars().all()
+
+                seasons_out.append(
+                    {
+                        "season_number": sea.season_number,
+                        "name": sea.name,
+                        "cover": sea.cover,
+                        "episode_count": sea.episode_count,
+                        "episodes": [
+                            {
+                                "episode_id": ep.provider_episode_id,
+                                "episode_number": ep.episode_number,
+                                "title": ep.title,
+                                "container_extension": ep.container_extension,
+                                "duration_secs": ep.duration_secs,
+                            }
+                            for ep in eps
+                        ],
+                    }
+                )
+
+            return {
+                "series_id": str(s.id),
+                "provider_id": str(s.provider_id),
+                "provider_series_id": s.provider_series_id,
+                "source": "database",
+                "seasons": seasons_out,
+            }
+
+    try:
+        raw = xtream_get(
+            p.base_url,
+            p.username,
+            p.password,
+            "get_series_info",
+            series_id=s.provider_series_id,
+        ) or {}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Error fetching from provider: {exc}") from exc
+
     seasons_raw = raw.get("seasons") or []
     episodes_raw = raw.get("episodes") or {}
 
@@ -110,20 +281,26 @@ def series_seasons(series_id: int, db=Depends(get_db)):
 
         eps_out = []
         for ep in eps:
-            eps_out.append({
-                "episode_id": ep.get("id") or ep.get("episode_id"),
-                "title": ep.get("title") or ep.get("name"),
-                "episode_num": ep.get("episode_num") or ep.get("episode_number"),
+            eps_out.append(
+                {
+                    "episode_id": ep.get("id") or ep.get("episode_id"),
+                    "title": ep.get("title") or ep.get("name"),
+                    "episode_number": ep.get("episode_num") or ep.get("episode_number"),
+                    "container_extension": ep.get("container_extension") or ep.get("container"),
+                    "duration_secs": ep.get("duration_secs") or ep.get("duration"),
+                }
+            )
+
+        seasons_out.append(
+            {
                 "season_number": sn,
-                "container_extension": ep.get("container_extension") or ep.get("container") or None,
-            })
+                "name": sea.get("name"),
+                "cover": sea.get("cover"),
+                "episode_count": len(eps_out),
+                "episodes": eps_out,
+            }
+        )
 
-        seasons_out.append({
-            "season_number": sn,
-            "episodes": eps_out,
-        })
-
-    # fallback: si no vino seasons pero sí episodes
     if not seasons_out and isinstance(episodes_raw, dict) and episodes_raw:
         for k, eps in episodes_raw.items():
             try:
@@ -132,22 +309,34 @@ def series_seasons(series_id: int, db=Depends(get_db)):
                 sn = k
             eps_out = []
             for ep in (eps or []):
-                eps_out.append({
-                    "episode_id": ep.get("id") or ep.get("episode_id"),
-                    "title": ep.get("title") or ep.get("name"),
-                    "episode_num": ep.get("episode_num") or ep.get("episode_number"),
+                eps_out.append(
+                    {
+                        "episode_id": ep.get("id") or ep.get("episode_id"),
+                        "title": ep.get("title") or ep.get("name"),
+                        "episode_number": ep.get("episode_num") or ep.get("episode_number"),
+                        "container_extension": ep.get("container_extension") or ep.get("container"),
+                        "duration_secs": ep.get("duration_secs") or ep.get("duration"),
+                    }
+                )
+            seasons_out.append(
+                {
                     "season_number": sn,
-                    "container_extension": ep.get("container_extension") or ep.get("container") or None,
-                })
-            seasons_out.append({"season_number": sn, "episodes": eps_out})
+                    "name": f"Season {sn}",
+                    "cover": None,
+                    "episode_count": len(eps_out),
+                    "episodes": eps_out,
+                }
+            )
 
-        # ordena por season
-        seasons_out.sort(key=lambda x: (x["season_number"] if isinstance(x["season_number"], int) else 999999))
+        seasons_out.sort(
+            key=lambda x: (x["season_number"] if isinstance(x["season_number"], int) else 999999)
+        )
 
     return {
-        "series_id": s.id,
-        "provider_id": s.provider_id,
+        "series_id": str(s.id),
+        "provider_id": str(s.provider_id),
         "provider_series_id": s.provider_series_id,
+        "source": "provider",
         "seasons": seasons_out,
     }
 
@@ -451,3 +640,28 @@ def series_detail(series_id: str, db: Session = Depends(get_db)):
         "tmdb_poster_path": s.tmdb_poster_path,
         "tmdb_backdrop_path": s.tmdb_backdrop_path,
     }
+
+
+def _parse_date(val):
+    """Helper para parsear fechas del proveedor."""
+    if not val:
+        return None
+    try:
+        if isinstance(val, str):
+            for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y"]:
+                try:
+                    return datetime.strptime(val, fmt)
+                except ValueError:
+                    continue
+        return None
+    except Exception:
+        return None
+
+
+def _coerce_int(val):
+    if val is None or val == "":
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
