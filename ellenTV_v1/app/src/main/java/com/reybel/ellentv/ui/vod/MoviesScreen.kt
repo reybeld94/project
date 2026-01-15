@@ -598,10 +598,11 @@ private fun String.extractYearFromDate(): String? {
 }
 
 private fun VodItem.resolvedDescription(): String? {
-    return listOfNotNull(overview, description, desc, shortDesc, longDesc)
+    return listOfNotNull(tmdbOverview, overview, description, desc, shortDesc, longDesc)
         .firstOrNull { it.isNotBlank() }
         ?.trim()
 }
+
 
 private fun VodItem.resolvedCast(): List<String>? {
     return (tmdbCast ?: cast)

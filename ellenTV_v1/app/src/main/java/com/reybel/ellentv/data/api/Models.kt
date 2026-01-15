@@ -158,7 +158,6 @@ data class VodItem(
     val name: String,
     @Json(name = "normalized_name") val normalizedName: String? = null,
 
-    // tu API dijo que devuelve “poster calculado”
     val poster: String? = null,
 
     @Json(name = "custom_poster_url") val customPosterUrl: String? = null,
@@ -176,6 +175,14 @@ data class VodItem(
     @Json(name = "tmdb_cast") val tmdbCast: List<String>? = null,
     val cast: List<String>? = null,
 
+    // ══════ NUEVOS CAMPOS TMDB ══════
+    @Json(name = "tmdb_overview") val tmdbOverview: String? = null,
+    @Json(name = "tmdb_poster_path") val tmdbPosterPath: String? = null,
+    @Json(name = "tmdb_backdrop_path") val tmdbBackdropPath: String? = null,
+    @Json(name = "tmdb_genres") val tmdbGenres: List<String>? = null,
+    @Json(name = "tmdb_release_date") val tmdbReleaseDate: String? = null,
+    // ════════════════════════════════
+
     @Json(name = "container_extension") val containerExtension: String? = null,
     val overview: String? = null,
     val description: String? = null,
@@ -188,12 +195,25 @@ data class VodItem(
     val backdrop: String? = null,
     @Json(name = "stream_url") val streamUrl: String? = null
 ) {
-    val posterUrl: String? get() = customPosterUrl ?: poster ?: streamIcon
-    val backdropUrl: String? get() = backdrop ?: backdropPath ?: posterUrl
+    // ══════ PROPIEDADES ACTUALIZADAS ══════
+    val posterUrl: String?
+        get() = customPosterUrl
+            ?: poster
+            ?: tmdbPosterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+            ?: streamIcon
+
+    val backdropUrl: String?
+        get() = backdrop
+            ?: tmdbBackdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+            ?: backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+            ?: posterUrl
+
     val displayTitle: String
         get() = when {
-            tmdbStatus == "synced" && !tmdbTitle.isNullOrBlank() -> tmdbTitle
+            tmdbStatus?.lowercase() in listOf("synced", "sync") && !tmdbTitle.isNullOrBlank() -> tmdbTitle
             !normalizedName.isNullOrBlank() -> normalizedName
             else -> name
         }
+    // ══════════════════════════════════════
 }
+

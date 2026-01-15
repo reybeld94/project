@@ -309,6 +309,13 @@ private fun VodItem.mergeWithFallback(fallback: VodItem): VodItem {
         tmdbCast = tmdbCast ?: fallback.tmdbCast,
         cast = cast ?: fallback.cast,
         containerExtension = containerExtension ?: fallback.containerExtension,
+        // ══════ NUEVOS CAMPOS ══════
+        tmdbOverview = tmdbOverview ?: fallback.tmdbOverview,
+        tmdbPosterPath = tmdbPosterPath ?: fallback.tmdbPosterPath,
+        tmdbBackdropPath = tmdbBackdropPath ?: fallback.tmdbBackdropPath,
+        tmdbGenres = tmdbGenres ?: fallback.tmdbGenres,
+        tmdbReleaseDate = tmdbReleaseDate ?: fallback.tmdbReleaseDate,
+        // ═══════════════════════════
         overview = overview ?: fallback.overview,
         description = description ?: fallback.description,
         desc = desc ?: fallback.desc,

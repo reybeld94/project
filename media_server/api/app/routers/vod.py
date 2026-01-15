@@ -118,9 +118,6 @@ def list_vod_all(
         .join(Provider, Provider.id == VodStream.provider_id)
     )
 
-    # Se eliminan filtros por activo (provider o stream) para mostrar todos los VOD.
-    # El flag active_only se mantiene en la firma por compatibilidad, pero ya no filtra.
-
     # Normaliza comparaciones de TMDB para tolerar mayúsculas y variantes "sync".
     tmdb_synced_values = ["synced", "sync"]
     if synced is True:
@@ -130,7 +127,6 @@ def list_vod_all(
             VodStream.tmdb_status == None,
             func.lower(VodStream.tmdb_status).not_in(tmdb_synced_values),
         ))
-
 
     if q:
         qq = f"%{q.strip()}%"
@@ -145,6 +141,28 @@ def list_vod_all(
         stmt.order_by(VodStream.name.asc())
         .limit(min(max(limit, 1), 200)).offset(offset)
     ).scalars().all()
+
+    def iso_date(x):
+        if not x:
+            return None
+        try:
+            return x.date().isoformat()
+        except Exception:
+            try:
+                return x.isoformat()
+            except Exception:
+                return str(x)
+
+    def extract_cast(raw):
+        """Extrae el cast del campo tmdb_raw"""
+        if not raw:
+            return []
+        try:
+            credits = raw.get("credits") or {}
+            cast = credits.get("cast") or []
+            return [c.get("name") for c in cast[:10] if c.get("name")]
+        except Exception:
+            return []
 
     return {
         "total": int(total),
@@ -168,9 +186,19 @@ def list_vod_all(
 
                 "is_active": x.is_active,
 
+                # === CAMPOS TMDB BÁSICOS ===
                 "tmdb_status": x.tmdb_status,
                 "tmdb_title": x.tmdb_title,
                 "tmdb_id": x.tmdb_id,
+
+                # === CAMPOS TMDB ADICIONALES (ANTES FALTABAN) ===
+                "tmdb_overview": x.tmdb_overview,
+                "tmdb_vote_average": x.tmdb_vote_average,
+                "tmdb_poster_path": x.tmdb_poster_path,
+                "tmdb_backdrop_path": x.tmdb_backdrop_path,
+                "tmdb_genres": x.tmdb_genres,
+                "tmdb_release_date": iso_date(x.tmdb_release_date),
+                "tmdb_cast": extract_cast(x.tmdb_raw),
 
                 "category_ext_id": x.category.provider_category_id if x.category else None,
                 "category_name": x.category.name if x.category else None,
