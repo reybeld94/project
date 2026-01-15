@@ -694,7 +694,7 @@ fun TvHomeScreen(
                 if (isFullscreen) return@onPreviewKeyEvent false
 
                 val ne = event.nativeKeyEvent
-                if (ne.action != KeyEvent.ACTION_UP) return@onPreviewKeyEvent false
+                if (ne.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
 
                 if (drawerOpen) {
                     when (ne.keyCode) {
@@ -934,7 +934,7 @@ fun TvHomeScreen(
 
                         val ne = event.nativeKeyEvent
 
-                        if (ne.action != android.view.KeyEvent.ACTION_UP) {
+                        if (ne.action != android.view.KeyEvent.ACTION_DOWN) {
                             return@onPreviewKeyEvent true
                         }
 
