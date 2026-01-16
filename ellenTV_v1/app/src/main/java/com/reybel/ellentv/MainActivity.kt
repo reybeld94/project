@@ -26,6 +26,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.reybel.ellentv.ui.epg.EpgSection
 import androidx.activity.viewModels
 import com.reybel.ellentv.ui.home.HomeViewModel
+import com.reybel.ellentv.ui.ondemand.OnDemandScreen
+import com.reybel.ellentv.ui.ondemand.OnDemandViewModel
 
 import com.reybel.ellentv.ui.player.VideoPlayerView
 import com.reybel.ellentv.ui.home.PreviewSection
@@ -101,8 +103,7 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         val homeVm: HomeViewModel by viewModels()
-        val moviesVm: com.reybel.ellentv.ui.vod.MoviesViewModel by viewModels()
-        val seriesVm: com.reybel.ellentv.ui.series.SeriesViewModel by viewModels()
+        val onDemandVm: OnDemandViewModel by viewModels()
 
         // Fullscreen (Fire TV feel)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -115,7 +116,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(typography = AppTypography) {
-                TvHomeScreen(playerManager, homeVm, moviesVm, seriesVm)
+                TvHomeScreen(playerManager, homeVm, onDemandVm)
             }
         }
     }
@@ -140,8 +141,7 @@ class MainActivity : ComponentActivity() {
 fun TvHomeScreen(
     playerManager: com.reybel.ellentv.ui.player.PlayerManager,
     vm: HomeViewModel,
-    moviesVm: com.reybel.ellentv.ui.vod.MoviesViewModel,
-    seriesVm: com.reybel.ellentv.ui.series.SeriesViewModel
+    onDemandVm: OnDemandViewModel
 ) {
     val ui by vm.ui.collectAsState()
     val context = LocalContext.current.applicationContext
@@ -171,9 +171,8 @@ fun TvHomeScreen(
     var healthIssue by remember { mutableStateOf<String?>(null) }
     var bufferLevel by remember { mutableStateOf("Normal") }
 
-    val moviesUi by moviesVm.ui.collectAsState()
-    val moviesSearchState by moviesVm.searchState.collectAsState()
-    val seriesUi by seriesVm.ui.collectAsState()
+    val onDemandUi by onDemandVm.ui.collectAsState()
+    val onDemandSearchState by onDemandVm.searchState.collectAsState()
 
     var vodLeftEdgeFocused by remember { mutableStateOf(false) }
     var vodActiveFullscreen by remember { mutableStateOf(false) }
@@ -427,12 +426,11 @@ fun TvHomeScreen(
         if (showBoot) showBoot = false
     }
 
-    // 🎬 Abrir VOD o Series según la sección actual
+    // 🎬 Abrir On Demand según la sección actual
     LaunchedEffect(section, providerId) {
         val pid = providerId ?: return@LaunchedEffect
         when (section) {
-            AppSection.MOVIES -> moviesVm.open()
-            AppSection.SERIES -> seriesVm.open(pid)
+            AppSection.ON_DEMAND -> onDemandVm.open(pid)
             else -> {}
         }
     }
@@ -486,9 +484,9 @@ fun TvHomeScreen(
         }
     }
 
-    // 🔧 MEJORADO: Cuando cambiamos de Live a VOD, detenemos el player completamente
+    // 🔧 MEJORADO: Cuando cambiamos de Live a On Demand, detenemos el player completamente
     LaunchedEffect(section) {
-        if (section == AppSection.MOVIES || section == AppSection.SERIES) {
+        if (section == AppSection.ON_DEMAND) {
             // 🔧 CRÍTICO: Detener completamente para evitar audio de fondo
             playerManager.stop()
         } else if (section == AppSection.LIVE) {
@@ -669,7 +667,7 @@ fun TvHomeScreen(
     }
 
     // 🔧 BackHandler para Movies: abrir sidebar solo con back
-    BackHandler(enabled = !showBoot && !isFullscreen && section == AppSection.MOVIES) {
+    BackHandler(enabled = !showBoot && !isFullscreen && section == AppSection.ON_DEMAND) {
         drawerOpen = true
     }
 
@@ -713,7 +711,7 @@ fun TvHomeScreen(
                     // 🔧 CORREGIDO: Lógica mejorada para abrir el menú
                     val canOpen = when (section) {
                         AppSection.LIVE -> epgOnChannelColumn // Solo si estamos en la columna de canales
-                        AppSection.MOVIES, AppSection.SERIES -> false // Solo se abre con Back en Movies
+                        AppSection.ON_DEMAND -> false // Solo se abre con Back en On Demand
                         else -> false
                     }
 
@@ -808,15 +806,18 @@ fun TvHomeScreen(
                 }
             }
 
-            AppSection.MOVIES -> {
-                com.reybel.ellentv.ui.vod.MoviesScreen(
-                    ui = moviesUi,
-                    searchState = moviesSearchState,
-                    onRequestMore = { providerId, lastIdx -> moviesVm.loadMoreIfNeeded(providerId, lastIdx) },
-                    onPlay = { vodId ->
+            AppSection.ON_DEMAND -> {
+                OnDemandScreen(
+                    ui = onDemandUi,
+                    searchState = onDemandSearchState,
+                    onFilterChange = { onDemandVm.setFilter(it) },
+                    onRequestMore = { collectionId, lastIdx ->
+                        onDemandVm.loadMoreIfNeeded(collectionId, lastIdx)
+                    },
+                    onPlayMovie = { vodId ->
                         scope.launch {
                             try {
-                                val url = moviesVm.getPlayUrl(vodId)
+                                val url = onDemandVm.getMoviePlayUrl(vodId)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
                                 isFullscreen = true
@@ -825,32 +826,22 @@ fun TvHomeScreen(
                             }
                         }
                     },
-                    onLeftEdgeFocusChanged = { vodLeftEdgeFocused = it },
-                    onSearchQueryChange = { query -> moviesVm.updateSearchQuery(query) },
-                    onSearch = { moviesVm.performSearch() },
-                    onSearchLoadMore = { moviesVm.loadMoreSearchResults() },
-                    onSearchDismiss = { moviesVm.clearSearch() },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            AppSection.SERIES -> {
-                com.reybel.ellentv.ui.series.SeriesScreen(
-                    ui = seriesUi,
-                    onSelectCategory = { seriesVm.selectCategory(it) },
-                    onRequestMore = { lastIdx -> seriesVm.loadMoreIfNeeded(lastIdx) },
-                    onPlay = { vodId ->
+                    onPlayEpisode = { providerId, episodeId, format ->
                         scope.launch {
                             try {
-                                val url = seriesVm.getPlayUrl(vodId)
+                                val url = onDemandVm.getSeriesEpisodePlayUrl(providerId, episodeId, format)
                                 vodActiveFullscreen = true
                                 playerManager.setStreamUrls(listOf(url))
                                 isFullscreen = true
                             } catch (e: Exception) {
-                                error = e.message ?: "Error playing series"
+                                error = e.message ?: "Error playing episode"
                             }
                         }
                     },
+                    onSearchQueryChange = { query -> onDemandVm.updateSearchQuery(query) },
+                    onSearch = { onDemandVm.performSearch() },
+                    onSearchLoadMore = { onDemandVm.loadMoreSearchResults() },
+                    onSearchDismiss = { onDemandVm.clearSearch() },
                     onLeftEdgeFocusChanged = { vodLeftEdgeFocused = it },
                     modifier = Modifier.fillMaxSize()
                 )
