@@ -77,6 +77,20 @@ function tmdbImg(path, size="w780") {
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return `${hours}h ${rem}m`;
+}
+
+function formatYear(dateString) {
+  if (!dateString) return null;
+  return dateString.split("-")[0] || null;
+}
+
 function coverBox(url, { rounded="rounded-xl" } = {}) {
   if (!url) {
     return el("div", {
@@ -288,10 +302,220 @@ export function SeriesPage(appState) {
 }
 
 export function SeriesDetailPage(appState, seriesId) {
+  let seasonsState = {
+    loaded: false,
+    loading: false,
+    data: null,
+    selectedIndex: 0,
+  };
+
   const status = el("div", { class:"text-xs text-zinc-500" }, "Cargando…");
   const wrap = el("div", { class:"h-full min-h-0 overflow-auto hz-scroll" }, [
     el("div", { class:"hz-glass rounded-2xl p-5 border border-white/10" }, "Loading…")
   ]);
+
+  function renderMetaChips(series) {
+    const metaChips = [
+      series.tmdb_vote_average ? `⭐ ${series.tmdb_vote_average.toFixed(1)}` : null,
+      formatYear(series.tmdb_first_air_date || series.tmdb_release_date),
+      series.tmdb_number_of_seasons ? `${series.tmdb_number_of_seasons} Seasons` : null,
+      series.tmdb_runtime ? `${series.tmdb_runtime}min/ep` : null,
+    ].filter(Boolean);
+
+    return el("div", { class:"flex flex-wrap gap-2 text-xs text-zinc-300" },
+      metaChips.map((chip) => badge(chip, "zinc"))
+    );
+  }
+
+  function renderNetworks(series) {
+    const networks = Array.isArray(series.tmdb_networks) ? series.tmdb_networks : [];
+    if (!networks.length) return null;
+    return el("div", { class:"mt-3" }, [
+      el("div", { class:"text-xs text-zinc-400 mb-2" }, "Networks"),
+      el("div", { class:"flex flex-wrap gap-2" },
+        networks.slice(0, 6).map((net) => badge(typeof net === "string" ? net : net?.name || "—", "blue"))
+      ),
+    ]);
+  }
+
+  function renderCast(series) {
+    const cast = Array.isArray(series.tmdb_cast) ? series.tmdb_cast.slice(0, 6) : [];
+    if (!cast.length) return null;
+    return el("div", { class:"mt-4" }, [
+      el("div", { class:"text-xs text-zinc-400 mb-2" }, "Cast"),
+      el("div", { class:"flex gap-3 overflow-x-auto pb-2" },
+        cast.map((actor) => {
+          const actorImg = actor?.profile_path ? tmdbImg(actor.profile_path, "w185") : null;
+          return el("div", { class:"flex flex-col items-center min-w-[60px]" }, [
+            el("div", {
+              class:"w-12 h-12 rounded-full bg-zinc-700 bg-cover bg-center ring-2 ring-white/10",
+              style: actorImg ? `background-image:url(${actorImg})` : ""
+            }),
+            el("div", { class:"text-xs text-zinc-300 mt-1 text-center truncate w-full" },
+              actor?.name?.split(" ")[0] || "—"
+            ),
+          ]);
+        })
+      ),
+    ]);
+  }
+
+  function renderEpisodesList(listEl, seasonsData, providerId, selectedIndex) {
+    listEl.innerHTML = "";
+    const season = seasonsData?.[selectedIndex];
+    if (!season) {
+      listEl.appendChild(el("div", { class:"text-sm text-zinc-500" }, "No hay episodios disponibles."));
+      return;
+    }
+
+    const seasonLabel = `Season ${season.season_number ?? "—"}`;
+    const seasonMeta = [
+      season.episodes?.length ? `${season.episodes.length} Episodes` : null,
+      formatYear(season.air_date),
+    ].filter(Boolean).join(" • ");
+
+    listEl.appendChild(
+      el("div", { class:"text-sm text-zinc-300 mb-3" }, `${seasonLabel}${seasonMeta ? ` • ${seasonMeta}` : ""}`)
+    );
+
+    const episodesWrap = el("div", { class:"space-y-2" });
+    for (const ep of (season.episodes || [])) {
+      const epTitle = ep.title || `Episode ${ep.episode_num ?? "—"}`;
+      const epDuration = formatDuration(ep.duration_secs);
+      const epExt = ep.container_extension ? ep.container_extension.toUpperCase() : null;
+      const thumbUrl = tmdbImg(ep.tmdb_still_path, "w300") || ep.cover || null;
+
+      episodesWrap.appendChild(
+        el("div", {
+          class:"flex items-center gap-4 p-3 rounded-xl bg-black/20 border border-white/5 hover:border-white/15 transition-all group"
+        }, [
+          el("div", { class:"w-16 h-10 rounded-lg bg-zinc-800/70 border border-white/5 bg-cover bg-center shrink-0" },
+            thumbUrl ? el("div", { class:"w-full h-full rounded-lg", style:`background-image:url(${thumbUrl}); background-size:cover; background-position:center;` }) : null
+          ),
+          el("div", {
+            class:"w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-sm shrink-0"
+          }, ep.episode_num ?? "—"),
+          el("div", { class:"flex-1 min-w-0" }, [
+            el("div", { class:"text-sm text-zinc-100 truncate" }, epTitle),
+            el("div", { class:"text-xs text-zinc-500 mt-0.5" },
+              [epDuration, epExt ? `• ${epExt}` : null].filter(Boolean).join(" ")
+            ),
+          ]),
+          el("div", { class:"flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" }, [
+            button("▶", { tone:"blue", small:true, onClick: async () => {
+              status.textContent = "Generando URL…";
+              try {
+                const r = await api.series.playEpisode(providerId, ep.episode_id, ep.container_extension || "mkv");
+                const ok = await copyToClipboard(r.url);
+                status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
+                setTimeout(() => { status.textContent = ""; }, 1200);
+              } catch (e) {
+                status.textContent = `Error: ${e.message}`;
+              }
+            }}),
+            button("📋", { tone:"zinc", small:true, onClick: async () => {
+              status.textContent = "Copiando URL…";
+              try {
+                const r = await api.series.playEpisode(providerId, ep.episode_id, ep.container_extension || "mkv");
+                const ok = await copyToClipboard(r.url);
+                status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
+                setTimeout(() => { status.textContent = ""; }, 1200);
+              } catch (e) {
+                status.textContent = `Error: ${e.message}`;
+              }
+            }}),
+          ])
+        ])
+      );
+    }
+
+    if (!season.episodes?.length) {
+      episodesWrap.appendChild(el("div", { class:"text-sm text-zinc-500" }, "No hay episodios en esta temporada."));
+    }
+
+    listEl.appendChild(episodesWrap);
+  }
+
+  function renderSeasonsPanel(series) {
+    const panel = el("div", { class:"hz-glass rounded-2xl p-5 border border-white/10" }, [
+      el("div", { class:"flex items-center justify-between" }, [
+        el("div", { class:"text-sm text-zinc-300 font-medium" }, "Seasons"),
+        el("div", { class:"text-xs text-zinc-500" }, "Selecciona una temporada"),
+      ]),
+    ]);
+
+    const tabsWrap = el("div", { class:"flex gap-2 overflow-x-auto pb-2 mt-4 border-b border-white/10" });
+    const episodesList = el("div", { class:"mt-4" }, [
+      el("div", { class:"text-sm text-zinc-500" }, "Selecciona una temporada para ver episodios.")
+    ]);
+
+    panel.appendChild(tabsWrap);
+    panel.appendChild(episodesList);
+
+    async function loadSeasons() {
+      if (seasonsState.loaded || seasonsState.loading) return;
+      seasonsState.loading = true;
+      episodesList.innerHTML = "";
+      episodesList.appendChild(el("div", { class:"text-sm text-zinc-500" }, "Cargando temporadas…"));
+      try {
+        const data = await api.series.seasons(series.id);
+        seasonsState.loaded = true;
+        seasonsState.loading = false;
+        seasonsState.data = data;
+
+        const seasons = data.seasons || [];
+        tabsWrap.innerHTML = "";
+
+        if (!seasons.length) {
+          episodesList.innerHTML = "";
+          episodesList.appendChild(el("div", { class:"text-sm text-zinc-500" }, "No seasons/episodes disponibles desde el provider."));
+          return;
+        }
+
+        seasonsState.selectedIndex = Math.min(seasonsState.selectedIndex, seasons.length - 1);
+
+        seasons.forEach((sea, idx) => {
+          const isActive = idx === seasonsState.selectedIndex;
+          tabsWrap.appendChild(
+            el("button", {
+              class: `px-4 py-2 rounded-t-lg text-sm font-medium transition-all ${isActive ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50"}`,
+              type: "button",
+              role: "tab",
+              "aria-selected": isActive ? "true" : "false",
+              onclick: () => {
+                seasonsState.selectedIndex = idx;
+                renderTabs();
+              }
+            }, `S${sea.season_number ?? idx + 1}`)
+          );
+        });
+
+        renderTabs();
+      } catch (e) {
+        seasonsState.loading = false;
+        episodesList.innerHTML = "";
+        episodesList.appendChild(el("div", { class:"text-sm text-zinc-500" }, `Error: ${e.message}`));
+      }
+    }
+
+    function renderTabs() {
+      const data = seasonsState.data;
+      const seasons = data?.seasons || [];
+      const providerId = data?.provider_id;
+      [...tabsWrap.children].forEach((btn, idx) => {
+        const isActive = idx === seasonsState.selectedIndex;
+        btn.className = `px-4 py-2 rounded-t-lg text-sm font-medium transition-all ${isActive ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700/50"}`;
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      renderEpisodesList(episodesList, seasons, providerId, seasonsState.selectedIndex);
+    }
+
+    panel.addEventListener("mouseenter", loadSeasons, { once: true });
+    panel.addEventListener("focusin", loadSeasons, { once: true });
+    loadSeasons();
+
+    return panel;
+  }
 
   async function load() {
     status.textContent = "Cargando…";
@@ -322,6 +546,7 @@ export function SeriesDetailPage(appState, seriesId) {
     const title = s.tmdb_title || s.normalized_name || s.name || "Series";
     const coverUrl = s.custom_cover_url || tmdbImg(s.tmdb_poster_path, "w500") || s.cover;
     const backdropUrl = tmdbImg(s.tmdb_backdrop_path, "w1280");
+    const metaChips = renderMetaChips(s);
 
     // ✅ Breadcrumb con “placa” legible (igual que Movies)
     const crumbs = el("div", {
@@ -372,45 +597,56 @@ export function SeriesDetailPage(appState, seriesId) {
               el("div", { class:"min-w-0" }, [
                 el("div", { class:"text-2xl font-semibold text-zinc-100 truncate" }, title),
                 el("div", { class:"text-sm text-zinc-400 mt-1" }, [
-                  s.tmdb_release_date ? `First air: ${s.tmdb_release_date}` : "First air: —",
+                  s.tmdb_first_air_date || s.tmdb_release_date
+                    ? `First air: ${s.tmdb_first_air_date || s.tmdb_release_date}`
+                    : "First air: —",
                   " • ",
                   `Provider: ${s.provider_name || "—"}`,
                 ]),
               ]),
-                            el("div", { class:"flex items-center gap-2 shrink-0" }, [
-                button("Play (first ep)", { tone:"blue", onClick: async () => {
-                  status.textContent = "Buscando episodio…";
-                  try {
-                    const seasons = await api.series.seasons(s.id);
-                    const firstSeason = (seasons.seasons || []).slice().sort((a,b)=> (a.season_number??0)-(b.season_number??0))[0];
-                    const firstEp = firstSeason?.episodes?.slice().sort((a,b)=> (a.episode_num??0)-(b.episode_num??0))[0];
-                    if (!firstEp?.episode_id) {
-                      status.textContent = "⚠️ No hay episodios (provider)";
-                      return;
-                    }
-                    const r = await api.series.playEpisode(seasons.provider_id, firstEp.episode_id, firstEp.container_extension || "mkv");
-                    const ok = await copyToClipboard(r.url);
-                    status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
-                    setTimeout(() => { status.textContent = ""; }, 1200);
-                  } catch (e) {
-                    status.textContent = `Error: ${e.message}`;
-                  }
-                }}),
-
-                (s.tmdb_trailer?.site === "YouTube" && s.tmdb_trailer?.key)
-                  ? button("Trailer", { tone:"zinc", onClick: () => window.open(`https://www.youtube.com/watch?v=${s.tmdb_trailer.key}`, "_blank") })
-                  : null,
-
-                button("Edit", { tone:"zinc", onClick: () => openSeriesEditModal(s, load) }),
-                button("Back", { tone:"zinc", onClick: () => go("/series") }),
-              ].filter(Boolean))
-
             ]),
+
+            el("div", { class:"mt-2" }, metaChips),
 
             el("div", { class:"mt-3 flex flex-wrap gap-2" }, [
               ...(Array.isArray(s.tmdb_genres) ? s.tmdb_genres.slice(0, 12).map(g => badge(g, "zinc")) : []),
-              s.tmdb_vote_average != null ? badge(`⭐ ${s.tmdb_vote_average}`, "amber") : null,
               s.tmdb_status ? badge(`TMDB: ${s.tmdb_status}`, s.tmdb_status === "synced" ? "green" : (s.tmdb_status === "failed" ? "red" : "zinc")) : null,
+              s.tmdb_status_detail ? badge(s.tmdb_status_detail, "amber") : null,
+            ].filter(Boolean)),
+
+            renderNetworks(s),
+            renderCast(s),
+
+            el("div", { class:"mt-4 flex flex-wrap items-center gap-2" }, [
+              button("▶ Play S1E1", { tone:"blue", onClick: async () => {
+                status.textContent = "Buscando episodio…";
+                try {
+                  const seasons = await api.series.seasons(s.id);
+                  const firstSeason = (seasons.seasons || []).slice().sort((a,b)=> (a.season_number??0)-(b.season_number??0))[0];
+                  const firstEp = firstSeason?.episodes?.slice().sort((a,b)=> (a.episode_num??0)-(b.episode_num??0))[0];
+                  if (!firstEp?.episode_id) {
+                    status.textContent = "⚠️ No hay episodios (provider)";
+                    return;
+                  }
+                  const r = await api.series.playEpisode(seasons.provider_id, firstEp.episode_id, firstEp.container_extension || "mkv");
+                  const ok = await copyToClipboard(r.url);
+                  status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
+                  setTimeout(() => { status.textContent = ""; }, 1200);
+                } catch (e) {
+                  status.textContent = `Error: ${e.message}`;
+                }
+              }}),
+              (s.tmdb_trailer?.site === "YouTube" && s.tmdb_trailer?.key)
+                ? button("🎬 Trailer", { tone:"zinc", onClick: () => window.open(`https://www.youtube.com/watch?v=${s.tmdb_trailer.key}`, "_blank") })
+                : null,
+              button("✏️ Edit", { tone:"zinc", onClick: () => openSeriesEditModal(s, load) }),
+              button("📋 Copy URL", { tone:"zinc", onClick: async () => {
+                const url = `${window.location.origin}/series/${s.id}`;
+                const ok = await copyToClipboard(url);
+                status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
+                setTimeout(() => { status.textContent = ""; }, 1200);
+              }}),
+              button("← Back", { tone:"zinc", onClick: () => go("/series") }),
             ].filter(Boolean)),
 
             el("div", { class:"mt-4 hz-glass rounded-2xl p-4 border border-white/10" }, [
@@ -423,82 +659,11 @@ export function SeriesDetailPage(appState, seriesId) {
       ])
     ]);
 
-        const seasonsPanel = el("div", { class:"hz-glass rounded-2xl p-5 border border-white/10" }, [
-      el("div", { class:"text-sm text-zinc-300 font-medium" }, "Seasons / Episodes"),
-      el("div", { class:"text-xs text-zinc-500 mt-1" }, "Se carga desde el provider (si lo da)."),
-      el("div", { class:"mt-3" }, [
-        el("details", { class:"rounded-xl border border-white/10 bg-black/20 p-3" }, [
-          el("summary", { class:"cursor-pointer text-sm text-zinc-200 select-none" }, "Show seasons"),
-          el("div", { class:"mt-3 text-sm text-zinc-300" }, "Loading…")
-        ])
-      ])
-    ]);
-
-    // lazy-load al abrir
-    const detailsEl = seasonsPanel.querySelector("details");
-    const bodyEl = seasonsPanel.querySelector("details > div.mt-3");
-    let loaded = false;
-
-    detailsEl.addEventListener("toggle", async () => {
-      if (!detailsEl.open || loaded) return;
-      loaded = true;
-      bodyEl.textContent = "Loading…";
-      try {
-        const data = await api.series.seasons(s.id);
-        const seasons = data.seasons || [];
-        if (!seasons.length) {
-          bodyEl.textContent = "No seasons/episodes disponibles desde el provider.";
-          return;
-        }
-
-        bodyEl.innerHTML = "";
-        for (const sea of seasons) {
-          const seasonBox = el("div", { class:"mt-3 rounded-xl border border-white/10 bg-black/15 p-3" }, [
-            el("div", { class:"text-sm text-zinc-100 font-medium" }, `Season ${sea.season_number ?? "—"} • ${sea.episodes?.length ?? 0} eps`),
-          ]);
-
-          const epsWrap = el("div", { class:"mt-2 space-y-2" });
-          for (const ep of (sea.episodes || [])) {
-            epsWrap.appendChild(
-              el("div", { class:"flex items-center justify-between gap-3 p-2 rounded-lg bg-black/20 border border-white/5" }, [
-                el("div", { class:"min-w-0" }, [
-                  el("div", { class:"text-sm text-zinc-100 truncate" }, ep.title || `Episode ${ep.episode_num ?? ""}`),
-                  el("div", { class:"text-xs text-zinc-500" }, `E${ep.episode_num ?? "—"} • ${ep.container_extension || "mkv"}`),
-                ]),
-                button("Play", { tone:"blue", small:true, onClick: async () => {
-                  status.textContent = "Generando URL…";
-                  try {
-                    const r = await api.series.playEpisode(data.provider_id, ep.episode_id, ep.container_extension || "mkv");
-                    const ok = await copyToClipboard(r.url);
-                    status.textContent = ok ? "✅ URL copiada" : "⚠️ No pude copiar";
-                    setTimeout(() => { status.textContent = ""; }, 1200);
-                  } catch (e) {
-                    status.textContent = `Error: ${e.message}`;
-                  }
-                }})
-              ])
-            );
-          }
-
-          seasonBox.appendChild(epsWrap);
-          bodyEl.appendChild(seasonBox);
-        }
-      } catch (e) {
-        bodyEl.textContent = `Error: ${e.message}`;
-      }
-    });
+    const seasonsPanel = renderSeasonsPanel(s);
 
     wrap.appendChild(el("div", { class:"space-y-4" }, [
       hero,
       seasonsPanel,
-      el("div", { class:"hz-glass rounded-2xl p-5 border border-white/10" }, [
-        el("div", { class:"text-sm text-zinc-300 font-medium" }, "Tech / IDs"),
-        el("div", { class:"mt-2 text-xs text-zinc-400 space-y-1" }, [
-          el("div", {}, `Series ID: ${s.id}`),
-          el("div", {}, `Provider Series ID: ${s.provider_series_id}`),
-          el("div", {}, `TMDB ID: ${s.tmdb_id ?? "—"}`),
-        ])
-      ])
     ]));
 
 
