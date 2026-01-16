@@ -1,10 +1,12 @@
 package com.reybel.ellentv.ui.ondemand
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reybel.ellentv.data.api.TmdbItem
 import com.reybel.ellentv.data.api.TmdbPagedResponse
 import com.reybel.ellentv.data.api.VodItem
+import com.reybel.ellentv.data.repo.PlaybackProgressCache
 import com.reybel.ellentv.data.repo.VodRepo
 import com.reybel.ellentv.ui.vod.SearchState
 import com.squareup.moshi.Moshi
@@ -54,6 +56,7 @@ data class OnDemandUiState(
 )
 
 class OnDemandViewModel(
+    private val context: Context? = null,
     private val repo: VodRepo = VodRepo()
 ) : ViewModel() {
 
@@ -66,6 +69,8 @@ class OnDemandViewModel(
     private var currentSearchQuery: String = ""
     private var movieSearchOffset: Int = 0
     private var seriesSearchOffset: Int = 0
+
+    private val progressCache: PlaybackProgressCache? = context?.let { PlaybackProgressCache(it) }
 
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
@@ -98,11 +103,43 @@ class OnDemandViewModel(
                         )
                     }
 
-                val allCollections = movieCollections + seriesCollections
+                // Create "Continue Watching" collection from saved progress
+                val continueWatchingItems = progressCache?.getAllResumable()?.mapNotNull { progress ->
+                    // Convert PlaybackProgress to VodItem
+                    VodItem(
+                        id = progress.contentId,
+                        name = progress.title ?: "Unknown",
+                        poster = progress.posterUrl,
+                        customPosterUrl = progress.posterUrl,
+                        backdropUrl = progress.backdropUrl,
+                        contentType = progress.contentType,
+                        streamIcon = progress.posterUrl
+                    )
+                } ?: emptyList()
+
+                val continueWatchingCollection = if (continueWatchingItems.isNotEmpty()) {
+                    listOf(
+                        OnDemandCollectionUi(
+                            collectionId = "continue_watching",
+                            title = "Continue Watching",
+                            contentType = ContentFilter.ALL,
+                            isLoading = false,
+                            items = continueWatchingItems,
+                            total = continueWatchingItems.size,
+                            page = 1,
+                            totalPages = 1
+                        )
+                    )
+                } else {
+                    emptyList()
+                }
+
+                val allCollections = continueWatchingCollection + movieCollections + seriesCollections
 
                 _ui.update { it.copy(isLoading = false, collections = allCollections) }
 
-                allCollections.forEach { collection ->
+                // Load first page for all collections except Continue Watching
+                allCollections.filter { it.collectionId != "continue_watching" }.forEach { collection ->
                     loadFirstPage(collection.collectionId)
                 }
             } catch (e: Exception) {

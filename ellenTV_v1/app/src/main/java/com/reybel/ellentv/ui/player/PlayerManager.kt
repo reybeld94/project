@@ -43,6 +43,8 @@ class PlayerManager(context: Context) {
     private var currentSeasonNumber: Int? = null
     private var currentEpisodeNumber: Int? = null
     private var currentTitle: String? = null
+    private var currentPosterUrl: String? = null
+    private var currentBackdropUrl: String? = null
 
     // URLs alternativas
     private var currentUrls: List<String> = emptyList()
@@ -759,6 +761,8 @@ class PlayerManager(context: Context) {
         currentSeasonNumber = null
         currentEpisodeNumber = null
         currentTitle = null
+        currentPosterUrl = null
+        currentBackdropUrl = null
     }
 
     fun release() {
@@ -781,13 +785,17 @@ class PlayerManager(context: Context) {
         contentType: String,
         title: String? = null,
         seasonNumber: Int? = null,
-        episodeNumber: Int? = null
+        episodeNumber: Int? = null,
+        posterUrl: String? = null,
+        backdropUrl: String? = null
     ) {
         currentContentId = contentId
         currentContentType = contentType
         currentTitle = title
         currentSeasonNumber = seasonNumber
         currentEpisodeNumber = episodeNumber
+        currentPosterUrl = posterUrl
+        currentBackdropUrl = backdropUrl
 
         if (isVodContent) {
             startProgressTracking()
@@ -826,7 +834,9 @@ class PlayerManager(context: Context) {
             duration = duration,
             seasonNumber = currentSeasonNumber,
             episodeNumber = currentEpisodeNumber,
-            title = currentTitle
+            title = currentTitle,
+            posterUrl = currentPosterUrl,
+            backdropUrl = currentBackdropUrl
         )
 
         // Only save if progress is meaningful (watched > 5s and < 95%)

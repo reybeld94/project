@@ -15,6 +15,8 @@ data class PlaybackProgress(
     val seasonNumber: Int? = null, // for episodes
     val episodeNumber: Int? = null, // for episodes
     val title: String? = null,
+    val posterUrl: String? = null, // for displaying in Continue Watching
+    val backdropUrl: String? = null, // for displaying in Continue Watching
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     val progressPercent: Float
@@ -71,5 +73,11 @@ class PlaybackProgressCache(context: Context) {
         val updated = current.entries.toMutableMap()
         updated.remove(contentId)
         save(PlaybackProgressPayload(updated))
+    }
+
+    suspend fun getAllResumable(): List<PlaybackProgress> {
+        return load().entries.values
+            .filter { it.shouldResume }
+            .sortedByDescending { it.updatedAt }
     }
 }
