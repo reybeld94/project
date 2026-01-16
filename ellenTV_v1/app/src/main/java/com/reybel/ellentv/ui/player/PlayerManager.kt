@@ -16,6 +16,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import com.reybel.ellentv.data.repo.PlaybackProgress
+import com.reybel.ellentv.data.repo.PlaybackProgressCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,6 +34,15 @@ class PlayerManager(context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var retryJob: Job? = null
     private var healthMonitorJob: Job? = null
+    private var progressSaveJob: Job? = null
+
+    // Progress tracking
+    private val progressCache = PlaybackProgressCache(context)
+    private var currentContentId: String? = null
+    private var currentContentType: String? = null
+    private var currentSeasonNumber: Int? = null
+    private var currentEpisodeNumber: Int? = null
+    private var currentTitle: String? = null
 
     // URLs alternativas
     private var currentUrls: List<String> = emptyList()
@@ -273,7 +284,10 @@ class PlayerManager(context: Context) {
 
                     Player.STATE_ENDED -> {
                         Log.w("ELLENTV_PLAYER", "Playback ended (isVOD=$isVodContent)")
-                        if (!isVodContent) {
+                        if (isVodContent) {
+                            // Mark as completed when video ends
+                            saveProgressNow(markCompleted = true)
+                        } else {
                             attemptReconnect()
                         }
                     }
@@ -716,6 +730,9 @@ class PlayerManager(context: Context) {
 
     fun pause() {
         player.playWhenReady = false
+        if (isVodContent) {
+            saveProgressNow()
+        }
     }
 
     fun resume() {
@@ -723,6 +740,10 @@ class PlayerManager(context: Context) {
     }
 
     fun stop() {
+        if (isVodContent) {
+            saveProgressNow()
+        }
+        progressSaveJob?.cancel()
         retryJob?.cancel()
         player.stop()
         player.clearMediaItems()
@@ -733,11 +754,18 @@ class PlayerManager(context: Context) {
         rebufferCount = 0
         isVodContent = false
         lastBufferUpgradeAt = 0L
+        currentContentId = null
+        currentContentType = null
+        currentSeasonNumber = null
+        currentEpisodeNumber = null
+        currentTitle = null
     }
 
     fun release() {
+        saveProgressNow() // Save before releasing
         retryJob?.cancel()
         healthMonitorJob?.cancel()
+        progressSaveJob?.cancel()
         player.release()
         onBuffering = null
         onError = null
@@ -745,6 +773,85 @@ class PlayerManager(context: Context) {
         onBitrateChanged = null
         onHealthIssue = null
         onBufferLevelChanged = null
+    }
+
+    // Progress tracking methods
+    fun setContentMetadata(
+        contentId: String,
+        contentType: String,
+        title: String? = null,
+        seasonNumber: Int? = null,
+        episodeNumber: Int? = null
+    ) {
+        currentContentId = contentId
+        currentContentType = contentType
+        currentTitle = title
+        currentSeasonNumber = seasonNumber
+        currentEpisodeNumber = episodeNumber
+
+        if (isVodContent) {
+            startProgressTracking()
+        }
+    }
+
+    private fun startProgressTracking() {
+        progressSaveJob?.cancel()
+        progressSaveJob = scope.launch {
+            delay(10_000) // Wait 10s before first save
+            while (true) {
+                if (isPlaying() && currentContentId != null) {
+                    saveProgressNow()
+                }
+                delay(10_000) // Save every 10 seconds
+            }
+        }
+    }
+
+    private fun saveProgressNow(markCompleted: Boolean = false) {
+        val contentId = currentContentId ?: return
+        val contentType = currentContentType ?: return
+
+        if (!isVodContent) return // Only save for VOD
+
+        val position = getCurrentPosition()
+        val duration = getDuration()
+
+        // Don't save if duration is not available yet or position is at the very start
+        if (duration <= 0 || position < 1000) return
+
+        val progress = PlaybackProgress(
+            contentId = contentId,
+            contentType = contentType,
+            position = if (markCompleted) 0 else position, // Reset if completed
+            duration = duration,
+            seasonNumber = currentSeasonNumber,
+            episodeNumber = currentEpisodeNumber,
+            title = currentTitle
+        )
+
+        // Only save if progress is meaningful (watched > 5s and < 95%)
+        if (progress.shouldResume || markCompleted) {
+            scope.launch(Dispatchers.IO) {
+                if (markCompleted) {
+                    progressCache.clearProgress(contentId)
+                    Log.d("ELLENTV_PROGRESS", "Cleared progress for $contentId (completed)")
+                } else {
+                    progressCache.saveProgress(progress)
+                    Log.d("ELLENTV_PROGRESS", "Saved progress: ${position}ms/${duration}ms (${progress.progressPercent.toInt()}%)")
+                }
+            }
+        }
+    }
+
+    suspend fun getSavedProgress(contentId: String): PlaybackProgress? {
+        return progressCache.getProgress(contentId)
+    }
+
+    fun seekToSavedPosition(progress: PlaybackProgress) {
+        if (progress.shouldResume && progress.position > 0) {
+            player.seekTo(progress.position)
+            Log.i("ELLENTV_PROGRESS", "Restored position: ${progress.position}ms (${progress.progressPercent.toInt()}%)")
+        }
     }
 
     // Helpers

@@ -90,7 +90,7 @@ data class SeriesDetailsUiState(
 @Composable
 fun SeriesDetailsScreen(
     item: VodItem,
-    onPlay: (providerId: String, episodeId: Int, format: String) -> Unit,
+    onPlay: (providerId: String, episodeId: Int, format: String, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -119,6 +119,9 @@ fun SeriesDetailsScreen(
         )
     }
     val repo = remember { VodRepo() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val progressCache = remember { com.reybel.ellentv.data.repo.PlaybackProgressCache(context) }
+    var lastWatchedProgress by remember { mutableStateOf<com.reybel.ellentv.data.repo.PlaybackProgress?>(null) }
 
     var visible by remember { mutableStateOf(false) }
     val contentAlpha by animateFloatAsState(
@@ -163,6 +166,22 @@ fun SeriesDetailsScreen(
                 tmdbStatus = response.tmdbStatus ?: uiState.tmdbStatus,
                 error = null
             )
+
+            // Find the most recently watched episode
+            val allProgress = mutableListOf<com.reybel.ellentv.data.repo.PlaybackProgress>()
+            response.providerId?.let { providerId ->
+                response.seasons.forEach { season ->
+                    season.episodes.forEach { episode ->
+                        val contentId = "$providerId:${episode.episodeId}"
+                        progressCache.getProgress(contentId)?.let { progress ->
+                            if (progress.shouldResume) {
+                                allProgress.add(progress)
+                            }
+                        }
+                    }
+                }
+            }
+            lastWatchedProgress = allProgress.maxByOrNull { it.updatedAt }
         } catch (e: Exception) {
             uiState = uiState.copy(
                 isLoading = false,
@@ -368,15 +387,40 @@ fun SeriesDetailsScreen(
                         animationSpec = tween(150),
                         label = "playScale"
                     )
-                    val canPlay = providerId != null && playEpisode != null
+
+                    // Determine which episode to play (last watched or first episode)
+                    val episodeToPlay = if (lastWatchedProgress?.shouldResume == true) {
+                        // Find the episode from progress
+                        val progress = lastWatchedProgress!!
+                        seasons.firstNotNullOfOrNull { season ->
+                            season.episodes.find { episode ->
+                                "$providerId:${episode.episodeId}" == progress.contentId
+                            }
+                        }
+                    } else {
+                        // First episode of first season
+                        playEpisode
+                    }
+
+                    val buttonText = if (lastWatchedProgress?.shouldResume == true && lastWatchedProgress!!.seasonNumber != null && lastWatchedProgress!!.episodeNumber != null) {
+                        "Continue S${lastWatchedProgress!!.seasonNumber}E${lastWatchedProgress!!.episodeNumber}"
+                    } else {
+                        "Play S${selectedSeason?.seasonNumber ?: 1}E1"
+                    }
+
+                    val canPlay = providerId != null && episodeToPlay != null
 
                     Surface(
                         onClick = {
                             if (canPlay) {
+                                val episode = episodeToPlay!!
                                 onPlay(
                                     providerId!!,
-                                    playEpisode!!.episodeId,
-                                    playEpisode.containerExtension ?: "mp4"
+                                    episode.episodeId,
+                                    episode.containerExtension ?: "mp4",
+                                    episode.title ?: item.displayTitle,
+                                    lastWatchedProgress?.seasonNumber ?: selectedSeason?.seasonNumber,
+                                    lastWatchedProgress?.episodeNumber ?: episode.episodeNumber
                                 )
                             }
                         },
@@ -384,7 +428,7 @@ fun SeriesDetailsScreen(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .height(48.dp)
-                            .width(160.dp)
+                            .width(180.dp)
                             .scale(playScale)
                             .focusRequester(focusRequester)
                             .onFocusChanged {
@@ -410,7 +454,7 @@ fun SeriesDetailsScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Play S${selectedSeason?.seasonNumber ?: 1}E1",
+                                text = buttonText,
                                 color = Color.Black,
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold
@@ -519,7 +563,10 @@ fun SeriesDetailsScreen(
                                 onPlay(
                                     provider,
                                     episode.episodeId,
-                                    episode.containerExtension ?: "mp4"
+                                    episode.containerExtension ?: "mp4",
+                                    episode.title ?: uiState.title,
+                                    selectedSeason?.seasonNumber,
+                                    episode.episodeNumber
                                 )
                             }
                         )

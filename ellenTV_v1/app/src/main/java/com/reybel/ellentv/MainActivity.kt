@@ -814,24 +814,60 @@ fun TvHomeScreen(
                     onRequestMore = { collectionId, lastIdx ->
                         onDemandVm.loadMoreIfNeeded(collectionId, lastIdx)
                     },
-                    onPlayMovie = { vodId ->
+                    onPlayMovie = { vodId, title ->
                         scope.launch {
                             try {
+                                // Check for saved progress
+                                val savedProgress = playerManager.getSavedProgress(vodId)
+
                                 val url = onDemandVm.getMoviePlayUrl(vodId)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
+
+                                // Set metadata for progress tracking
+                                playerManager.setContentMetadata(
+                                    contentId = vodId,
+                                    contentType = "movie",
+                                    title = title
+                                )
+
+                                // Restore saved position if exists
+                                savedProgress?.let { progress ->
+                                    playerManager.seekToSavedPosition(progress)
+                                }
+
                                 isFullscreen = true
                             } catch (e: Exception) {
                                 error = e.message ?: "Error playing VOD"
                             }
                         }
                     },
-                    onPlayEpisode = { providerId, episodeId, format ->
+                    onPlayEpisode = { providerId, episodeId, format, title, seasonNum, episodeNum ->
                         scope.launch {
                             try {
+                                val contentId = "$providerId:$episodeId"
+
+                                // Check for saved progress
+                                val savedProgress = playerManager.getSavedProgress(contentId)
+
                                 val url = onDemandVm.getSeriesEpisodePlayUrl(providerId, episodeId, format)
                                 vodActiveFullscreen = true
                                 playerManager.setStreamUrls(listOf(url))
+
+                                // Set metadata for progress tracking
+                                playerManager.setContentMetadata(
+                                    contentId = contentId,
+                                    contentType = "episode",
+                                    title = title,
+                                    seasonNumber = seasonNum,
+                                    episodeNumber = episodeNum
+                                )
+
+                                // Restore saved position if exists
+                                savedProgress?.let { progress ->
+                                    playerManager.seekToSavedPosition(progress)
+                                }
+
                                 isFullscreen = true
                             } catch (e: Exception) {
                                 error = e.message ?: "Error playing episode"
