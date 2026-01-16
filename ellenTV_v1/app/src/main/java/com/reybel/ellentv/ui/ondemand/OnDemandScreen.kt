@@ -120,7 +120,7 @@ fun OnDemandScreen(
     val progressMap = remember(ui.collections) {
         val progressCache = com.reybel.ellentv.data.repo.PlaybackProgressCache(context)
         val allProgress = progressCache.getAllResumable()
-        allProgress.associate { progress ->
+        allProgress.associate { progress: com.reybel.ellentv.data.repo.PlaybackProgress ->
             progress.contentId to (progress.progressPercentage / 100f)
         }
     }
