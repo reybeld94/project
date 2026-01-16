@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.reybel.ellentv"
-    compileSdk = 36
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.reybel.ellentv"
         minSdk = 23
-        targetSdk = 36
+        targetSdk = 30
         versionCode = 1
         versionName = "1.0"
     }
@@ -72,7 +72,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2025.12.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation-layout")
