@@ -392,7 +392,7 @@ fun SeriesDetailsScreen(
                     val episodeToPlay = if (lastWatchedProgress?.shouldResume == true) {
                         // Find the episode from progress
                         val progress = lastWatchedProgress!!
-                        seasons.firstNotNullOfOrNull { season ->
+                        uiState.seasons.firstNotNullOfOrNull { season ->
                             season.episodes.find { episode ->
                                 "$providerId:${episode.episodeId}" == progress.contentId
                             }
