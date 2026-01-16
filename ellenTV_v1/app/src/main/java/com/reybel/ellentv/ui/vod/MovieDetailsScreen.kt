@@ -61,8 +61,9 @@ private val CyanAccentDark = Color(0xFF0891B2)
 @Composable
 fun MovieDetailsScreen(
     item: VodItem,
-    onPlay: (vodId: String) -> Unit,
-    modifier: Modifier = Modifier
+    onPlay: (vodId: String, title: String?) -> Unit,
+    modifier: Modifier = Modifier,
+    savedProgress: com.reybel.ellentv.data.repo.PlaybackProgress? = null
 ) {
     val focusRequester = remember { FocusRequester() }
     var playFocused by remember { mutableStateOf(false) }
@@ -286,8 +287,10 @@ fun MovieDetailsScreen(
                         label = "playScale"
                     )
 
+                    val buttonText = if (savedProgress?.shouldResume == true) "Continue" else "Play"
+
                     Surface(
-                        onClick = { onPlay(item.id) },
+                        onClick = { onPlay(item.id, item.displayTitle) },
                         color = if (playFocused) CyanAccent else CyanAccentDark,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
@@ -311,7 +314,7 @@ fun MovieDetailsScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Play",
+                                text = buttonText,
                                 color = if (playFocused) Color.Black else Color.White,
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold

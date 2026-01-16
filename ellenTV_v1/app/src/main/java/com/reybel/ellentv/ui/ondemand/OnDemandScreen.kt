@@ -73,8 +73,8 @@ fun OnDemandScreen(
     searchState: SearchState,
     onFilterChange: (ContentFilter) -> Unit,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
-    onPlayMovie: (vodId: String) -> Unit,
-    onPlayEpisode: (providerId: String, episodeId: Int, format: String) -> Unit,
+    onPlayMovie: (vodId: String, title: String?) -> Unit,
+    onPlayEpisode: (providerId: String, episodeId: Int, format: String, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onSearchLoadMore: () -> Unit,
@@ -104,9 +104,20 @@ fun OnDemandScreen(
         onSearchDismiss()
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedItem by remember { mutableStateOf<VodItem?>(null) }
+    var savedProgress by remember { mutableStateOf<com.reybel.ellentv.data.repo.PlaybackProgress?>(null) }
+
     BackHandler(enabled = selectedItem != null && !showSearchOverlay) {
         selectedItem = null
+    }
+
+    // Fetch saved progress when item is selected
+    LaunchedEffect(selectedItem) {
+        savedProgress = selectedItem?.let { item ->
+            val progressCache = com.reybel.ellentv.data.repo.PlaybackProgressCache(context)
+            progressCache.getProgress(item.id)
+        }
     }
 
     if (selectedItem != null && !showSearchOverlay) {
@@ -123,6 +134,7 @@ fun OnDemandScreen(
             MovieDetailsScreen(
                 item = item,
                 onPlay = onPlayMovie,
+                savedProgress = savedProgress,
                 modifier = modifier
             )
         }
