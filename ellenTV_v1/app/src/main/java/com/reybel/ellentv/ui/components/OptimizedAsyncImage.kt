@@ -20,6 +20,7 @@ const val OPTIMIZED_PLACEHOLDER_MEMORY_KEY = "optimized_async_image_placeholder"
 fun OptimizedAsyncImage(
     url: String,
     modifier: Modifier = Modifier,
+    contentDescription: String? = null,
     contentScale: ContentScale = ContentScale.Fit,
     targetSizePx: Int? = 96
 ) {
@@ -47,7 +48,7 @@ fun OptimizedAsyncImage(
 
     AsyncImage(
         model = imageRequest,
-        contentDescription = null,
+        contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
         placeholder = placeholderPainter,
