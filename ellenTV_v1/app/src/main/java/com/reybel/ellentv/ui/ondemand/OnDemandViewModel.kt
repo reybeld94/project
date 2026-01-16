@@ -279,7 +279,7 @@ class OnDemandViewModel(
                     ContentFilter.SERIES -> {
                         val providerId = _ui.value.providerId ?: return@launch
                         val nextOffset = collection.offset + collection.limit
-                        val resp = repo.fetchVodPage(providerId, collection.categoryExtId, collection.limit, nextOffset)
+                        val resp = repo.fetchSeriesPage(providerId, collection.categoryExtId, collection.limit, nextOffset)
                         val totalPages = ceil(resp.total / collection.limit.toDouble()).toInt().coerceAtLeast(1)
                         updateCollection(collectionId) {
                             it.copy(
@@ -329,7 +329,7 @@ class OnDemandViewModel(
                     }
                     ContentFilter.SERIES -> {
                         val providerId = _ui.value.providerId ?: return@launch
-                        val resp = repo.fetchVodPage(providerId, collection.categoryExtId, collection.limit, 0)
+                        val resp = repo.fetchSeriesPage(providerId, collection.categoryExtId, collection.limit, 0)
                         val totalPages = ceil(resp.total / collection.limit.toDouble()).toInt().coerceAtLeast(1)
                         updateCollection(collectionId) {
                             it.copy(

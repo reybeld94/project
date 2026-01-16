@@ -165,6 +165,7 @@ data class VodItem(
     @Json(name = "normalized_name") val normalizedName: String? = null,
 
     val poster: String? = null,
+    @Json(name = "cover") val cover: String? = null,
 
     @Json(name = "custom_poster_url") val customPosterUrl: String? = null,
     @Json(name = "stream_icon") val streamIcon: String? = null,
@@ -206,6 +207,7 @@ data class VodItem(
     val posterUrl: String?
         get() = customPosterUrl
             ?: poster
+            ?: cover
             ?: resolveTmdbImagePath(tmdbPosterPath, "w500")
             ?: streamIcon
 
