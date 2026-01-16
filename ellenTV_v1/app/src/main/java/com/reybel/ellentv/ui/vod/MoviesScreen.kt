@@ -110,7 +110,7 @@ fun MoviesScreen(
     if (selectedItem != null && !showSearchOverlay) {
         MovieDetailsScreen(
             item = selectedItem ?: return,
-            onPlay = onPlay,
+            onPlay = { item -> onPlay(item.id) },
             modifier = modifier
         )
         return
