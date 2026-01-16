@@ -128,7 +128,12 @@ fun SeriesDetailsScreen(
             )
         }
         visible = true
-        focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            focusRequester.requestFocus()
+        }
     }
 
     if (uiState.isLoading) {
