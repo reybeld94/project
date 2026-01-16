@@ -123,6 +123,7 @@ fun VodPlayerControls(
     val subtitlesButtonFocusRequester = remember { FocusRequester() }
     val audioButtonFocusRequester = remember { FocusRequester() }
     val sliderFocusRequester = remember { FocusRequester() }
+    val controlsFocusRequester = remember { FocusRequester() }
 
     val focusManager = LocalFocusManager.current
 
@@ -180,6 +181,17 @@ fun VodPlayerControls(
         }
     }
 
+    // Mantener el foco en los controles para capturar teclas del mando
+    LaunchedEffect(controlsVisible, dialogVisible) {
+        if (!dialogVisible) {
+            try {
+                controlsFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                // Ignorar si el focus requester no está listo
+            }
+        }
+    }
+
     // Auto-hide del indicador de seek
     LaunchedEffect(seekIndicator) {
         if (seekIndicator != null) {
@@ -229,6 +241,8 @@ fun VodPlayerControls(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .focusRequester(controlsFocusRequester)
+            .focusable()
             .pointerInput(Unit) {
                 detectTapGestures {
                     if (!dialogVisible) {
