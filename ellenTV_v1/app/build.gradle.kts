@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.tv.foundation)
     implementation(libs.androidx.tv.material)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation(libs.androidx.activity.compose)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
