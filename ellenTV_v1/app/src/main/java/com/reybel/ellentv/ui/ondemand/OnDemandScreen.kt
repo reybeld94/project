@@ -163,6 +163,9 @@ fun OnDemandScreen(
         ContentFilter.ALL -> ui.collections
         ContentFilter.MOVIES -> ui.collections.filter { it.contentType == ContentFilter.MOVIES }
         ContentFilter.SERIES -> ui.collections.filter { it.contentType == ContentFilter.SERIES }
+    }.filter { collection ->
+        // Only show collections that are either loading or have items
+        collection.isLoading || collection.items.isNotEmpty()
     }
 
     var focusedCollectionIndex by remember { mutableIntStateOf(0) }
