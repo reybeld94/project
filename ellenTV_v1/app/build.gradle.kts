@@ -72,7 +72,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation-layout")
@@ -81,15 +81,15 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Activity Compose
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.activity:activity-compose:1.9.0")
 
     // TV Material
     implementation("androidx.tv:tv-material:1.0.0")
 
     // Media3 (ExoPlayer)
-    implementation("androidx.media3:media3-exoplayer:1.9.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.9.0")
-    implementation("androidx.media3:media3-ui:1.9.0")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
 
     // Retrofit & OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
