@@ -8,6 +8,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -17,9 +18,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -58,8 +63,8 @@ import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.data.repo.VodRepo
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
 
-private val BackgroundColor = Color(0xFF0A0A0A)
-private val CyanAccent = Color(0xFF00D9FF)
+private val BackgroundColor = Color.Black
+private val CyanAccent = Color(0xFF22D3EE)
 
 data class SeriesDetailsUiState(
     val isLoading: Boolean = true,
@@ -203,6 +208,7 @@ fun SeriesDetailsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(start = 48.dp, end = 48.dp, top = 40.dp, bottom = 32.dp)
                 .graphicsLayer { alpha = contentAlpha }
         ) {
@@ -216,10 +222,9 @@ fun SeriesDetailsScreen(
             val playEpisode = episodes.firstOrNull()
             val providerId = uiState.providerId
 
+            // Main info section
             Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.55f)
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth(0.52f),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
@@ -300,6 +305,8 @@ fun SeriesDetailsScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(4.dp))
+
                 uiState.overview?.let { overview ->
                     Text(
                         text = overview,
@@ -307,10 +314,12 @@ fun SeriesDetailsScreen(
                         style = MaterialTheme.typography.bodyMedium.copy(
                             lineHeight = 22.sp
                         ),
-                        maxLines = 3,
+                        maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -383,6 +392,9 @@ fun SeriesDetailsScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Seasons selector
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -414,9 +426,12 @@ fun SeriesDetailsScreen(
                         )
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // Episodes section
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Season ${selectedSeason?.seasonNumber ?: 1} • ${episodes.size} Episodes",
                     style = MaterialTheme.typography.titleMedium,
@@ -424,20 +439,24 @@ fun SeriesDetailsScreen(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                LazyColumn(
+                // Grid horizontal de episodios - mucho más compacto
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(2),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .height(320.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     itemsIndexed(episodes) { index, episode ->
-                        EpisodeRow(
+                        CompactEpisodeCard(
                             episode = episode,
                             episodeNumber = index + 1,
                             onPlay = {
-                                val provider = providerId ?: return@EpisodeRow
+                                val provider = providerId ?: return@CompactEpisodeCard
                                 onPlay(
                                     provider,
                                     episode.episodeId,
@@ -448,33 +467,44 @@ fun SeriesDetailsScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Row(
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .graphicsLayer { alpha = contentAlpha }
         ) {
-            Surface(
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(4.dp)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "BACK",
-                    color = Color.White.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    text = "Press",
+                    color = Color.White.copy(alpha = 0.35f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Surface(
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "←",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+                Text(
+                    text = "to go back",
+                    color = Color.White.copy(alpha = 0.35f),
+                    style = MaterialTheme.typography.labelSmall
                 )
             }
-            Text(
-                text = "to go back",
-                color = Color.White.copy(alpha = 0.35f),
-                style = MaterialTheme.typography.labelSmall
-            )
         }
     }
 }
@@ -589,7 +619,7 @@ private fun SeasonTab(
 }
 
 @Composable
-private fun EpisodeRow(
+private fun CompactEpisodeCard(
     episode: EpisodeInfo,
     episodeNumber: Int,
     onPlay: () -> Unit,
@@ -598,7 +628,7 @@ private fun EpisodeRow(
     var isFocused by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.02f else 1f,
+        targetValue = if (isFocused) 1.03f else 1f,
         animationSpec = tween(150),
         label = "episodeScale"
     )
@@ -610,7 +640,7 @@ private fun EpisodeRow(
     }
 
     val borderColor = if (isFocused) {
-        CyanAccent.copy(alpha = 0.5f)
+        CyanAccent.copy(alpha = 0.6f)
     } else {
         Color.White.copy(alpha = 0.08f)
     }
@@ -618,49 +648,63 @@ private fun EpisodeRow(
     Surface(
         onClick = onPlay,
         color = backgroundColor,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.5.dp, borderColor),
         modifier = modifier
-            .fillMaxWidth()
+            .width(340.dp)
+            .height(145.dp)
             .scale(scale)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+                .padding(14.dp)
+                .fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Episode number badge
             Surface(
                 color = if (isFocused) {
-                    CyanAccent.copy(alpha = 0.2f)
+                    CyanAccent.copy(alpha = 0.25f)
                 } else {
                     Color.White.copy(alpha = 0.1f)
                 },
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(
-                    text = "$episodeNumber",
-                    color = if (isFocused) CyanAccent else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(52.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$episodeNumber",
+                        color = if (isFocused) CyanAccent else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            // Episode info
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
                     text = episode.title ?: "Episode $episodeNumber",
                     color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
                 episode.durationSecs?.let { secs ->
                     val minutes = secs / 60
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "${minutes} min",
                         color = Color.White.copy(alpha = 0.5f),
@@ -669,12 +713,27 @@ private fun EpisodeRow(
                 }
             }
 
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = if (isFocused) CyanAccent else Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.size(28.dp)
-            )
+            // Play icon
+            Surface(
+                color = if (isFocused) {
+                    CyanAccent.copy(alpha = 0.2f)
+                } else {
+                    Color.White.copy(alpha = 0.08f)
+                },
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier.size(44.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        tint = if (isFocused) CyanAccent else Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
     }
 }
