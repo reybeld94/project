@@ -242,7 +242,18 @@ data class SeriesListResponse(
 data class SeriesSeasonsResponse(
     @Json(name = "series_id") val seriesId: String,
     @Json(name = "provider_id") val providerId: String,
-    val seasons: List<SeasonInfo> = emptyList()
+    val seasons: List<SeasonInfo> = emptyList(),
+    @Json(name = "tmdb_status") val tmdbStatus: String? = null,
+    @Json(name = "tmdb_title") val tmdbTitle: String? = null,
+    @Json(name = "tmdb_id") val tmdbId: Int? = null,
+    @Json(name = "tmdb_vote_average") val tmdbVoteAverage: Double? = null,
+    @Json(name = "tmdb_original_language") val tmdbOriginalLanguage: String? = null,
+    @Json(name = "tmdb_cast") val tmdbCast: List<String>? = null,
+    @Json(name = "tmdb_overview") val tmdbOverview: String? = null,
+    @Json(name = "tmdb_poster_path") val tmdbPosterPath: String? = null,
+    @Json(name = "tmdb_backdrop_path") val tmdbBackdropPath: String? = null,
+    @Json(name = "tmdb_genres") val tmdbGenres: List<String>? = null,
+    @Json(name = "tmdb_release_date") val tmdbReleaseDate: String? = null
 )
 
 data class OnDemandSearchResponse(
