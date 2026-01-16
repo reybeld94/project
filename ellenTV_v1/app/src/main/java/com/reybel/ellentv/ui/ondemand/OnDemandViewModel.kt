@@ -111,7 +111,7 @@ class OnDemandViewModel(
                         name = progress.title ?: "Unknown",
                         poster = progress.posterUrl,
                         customPosterUrl = progress.posterUrl,
-                        backdropUrl = progress.backdropUrl,
+                        backdrop = progress.backdropUrl,
                         contentType = progress.contentType,
                         streamIcon = progress.posterUrl
                     )
