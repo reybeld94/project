@@ -73,7 +73,7 @@ fun OnDemandScreen(
     searchState: SearchState,
     onFilterChange: (ContentFilter) -> Unit,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
-    onPlayMovie: (vodId: String, title: String?) -> Unit,
+    onPlayMovie: (item: VodItem) -> Unit,
     onPlayEpisode: (providerId: String, episodeId: Int, format: String, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,

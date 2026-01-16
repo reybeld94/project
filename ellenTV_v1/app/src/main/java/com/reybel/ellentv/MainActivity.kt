@@ -103,7 +103,14 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         val homeVm: HomeViewModel by viewModels()
-        val onDemandVm: OnDemandViewModel by viewModels()
+        val onDemandVm: OnDemandViewModel by viewModels {
+            object : androidx.lifecycle.ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                    return OnDemandViewModel(applicationContext) as T
+                }
+            }
+        }
 
         // Fullscreen (Fire TV feel)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -814,21 +821,23 @@ fun TvHomeScreen(
                     onRequestMore = { collectionId, lastIdx ->
                         onDemandVm.loadMoreIfNeeded(collectionId, lastIdx)
                     },
-                    onPlayMovie = { vodId, title ->
+                    onPlayMovie = { item ->
                         scope.launch {
                             try {
                                 // Check for saved progress
-                                val savedProgress = playerManager.getSavedProgress(vodId)
+                                val savedProgress = playerManager.getSavedProgress(item.id)
 
-                                val url = onDemandVm.getMoviePlayUrl(vodId)
+                                val url = onDemandVm.getMoviePlayUrl(item.id)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
 
                                 // Set metadata for progress tracking
                                 playerManager.setContentMetadata(
-                                    contentId = vodId,
+                                    contentId = item.id,
                                     contentType = "movie",
-                                    title = title
+                                    title = item.displayTitle,
+                                    posterUrl = item.poster ?: item.customPosterUrl,
+                                    backdropUrl = item.backdropUrl
                                 )
 
                                 // Restore saved position if exists
