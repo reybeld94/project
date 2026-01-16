@@ -116,12 +116,13 @@ fun OnDemandScreen(
     var selectedItem by remember { mutableStateOf<VodItem?>(null) }
     var savedProgress by remember { mutableStateOf<com.reybel.ellentv.data.repo.PlaybackProgress?>(null) }
 
-    // Create progress map for Continue Watching items
-    val progressMap = remember(ui.collections) {
+    var progressMap by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+
+    LaunchedEffect(ui.collections) {
         val progressCache = com.reybel.ellentv.data.repo.PlaybackProgressCache(context)
         val allProgress = progressCache.getAllResumable()
-        allProgress.associate { progress: com.reybel.ellentv.data.repo.PlaybackProgress ->
-            progress.contentId to (progress.progressPercentage / 100f)
+        progressMap = allProgress.associate { progress ->
+            progress.contentId to (progress.progressPercent / 100f)
         }
     }
 
@@ -391,6 +392,8 @@ private fun CollectionRow(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+        val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -426,7 +429,6 @@ private fun CollectionRow(
             )
         }
 
-        val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
         var focusedIndex by remember(collection.collectionId) { mutableIntStateOf(initialFocusedIndex) }
         val targetFocusIndex = remember(collection.items.size, focusRequesterIndex) {
             if (collection.items.isEmpty()) 0 else focusRequesterIndex.coerceIn(0, collection.items.lastIndex)
