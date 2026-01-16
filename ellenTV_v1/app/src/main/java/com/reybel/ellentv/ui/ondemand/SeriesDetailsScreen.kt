@@ -109,9 +109,10 @@ fun SeriesDetailsScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (uiState.backdropUrl != null) {
+        val backdropUrl = uiState.backdropUrl
+        if (backdropUrl != null) {
             OptimizedAsyncImage(
-                url = uiState.backdropUrl,
+                url = backdropUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
