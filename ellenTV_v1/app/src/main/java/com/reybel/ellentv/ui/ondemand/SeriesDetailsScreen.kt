@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ import com.reybel.ellentv.data.api.SeasonInfo
 import com.reybel.ellentv.data.api.VodItem
 import com.reybel.ellentv.data.repo.VodRepo
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
+import kotlinx.coroutines.launch
 
 private val BackgroundColor = Color.Black
 private val CyanAccent = Color(0xFF22D3EE)
@@ -96,6 +98,8 @@ fun SeriesDetailsScreen(
     var playFocused by remember { mutableStateOf(false) }
     var trailerFocused by remember { mutableStateOf(false) }
     var listFocused by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
     var uiState by remember {
         mutableStateOf(
@@ -241,7 +245,7 @@ fun SeriesDetailsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(start = 48.dp, end = 48.dp, top = 40.dp, bottom = 32.dp)
                 .graphicsLayer { alpha = contentAlpha }
         ) {
@@ -383,7 +387,14 @@ fun SeriesDetailsScreen(
                             .width(160.dp)
                             .scale(playScale)
                             .focusRequester(focusRequester)
-                            .onFocusChanged { playFocused = it.isFocused }
+                            .onFocusChanged {
+                                playFocused = it.isFocused
+                                if (it.isFocused) {
+                                    coroutineScope.launch {
+                                        scrollState.animateScrollTo(0)
+                                    }
+                                }
+                            }
                             .focusable()
                     ) {
                         Row(
@@ -412,7 +423,14 @@ fun SeriesDetailsScreen(
                         icon = Icons.Outlined.PlayCircleOutline,
                         label = "Trailer",
                         isFocused = trailerFocused,
-                        onFocusChanged = { trailerFocused = it },
+                        onFocusChanged = {
+                            trailerFocused = it
+                            if (it) {
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo(0)
+                                }
+                            }
+                        },
                         onClick = { }
                     )
 
@@ -420,7 +438,14 @@ fun SeriesDetailsScreen(
                         icon = Icons.Outlined.Add,
                         label = "My List",
                         isFocused = listFocused,
-                        onFocusChanged = { listFocused = it },
+                        onFocusChanged = {
+                            listFocused = it
+                            if (it) {
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo(0)
+                                }
+                            }
+                        },
                         onClick = { }
                     )
                 }
@@ -709,7 +734,7 @@ private fun CompactEpisodeCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp),
+                        .size(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -757,14 +782,14 @@ private fun CompactEpisodeCard(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Box(
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(36.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Play",
                         tint = if (isFocused) CyanAccent else Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }

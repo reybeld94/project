@@ -493,9 +493,8 @@ private fun SearchResultCard(
         label = "cardScale"
     )
 
-    val imageUrl = item.customPosterUrl
-        ?: item.poster
-        ?: item.streamIcon
+    val imageUrl = item.posterUrl
+        ?: item.backdropUrl
 
     Surface(
         onClick = onClick,
