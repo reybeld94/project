@@ -12,6 +12,46 @@ from sqlalchemy.exc import IntegrityError
 router = APIRouter(prefix="/series", tags=["series"])
 
 
+def _iso_date(value):
+    if not value:
+        return None
+    try:
+        return value.date().isoformat()
+    except Exception:
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+
+
+def _series_tmdb_payload(series: SeriesItem):
+    raw = series.tmdb_raw or {}
+    tmdb_original_language = None
+    tmdb_cast = None
+
+    try:
+        tmdb_original_language = raw.get("original_language")
+        credits = raw.get("credits") or {}
+        cast = credits.get("cast") or []
+        tmdb_cast = [c.get("name") for c in cast if c.get("name")] or None
+    except Exception:
+        tmdb_cast = None
+
+    return {
+        "tmdb_status": series.tmdb_status,
+        "tmdb_title": series.tmdb_title,
+        "tmdb_id": series.tmdb_id,
+        "tmdb_vote_average": series.tmdb_vote_average,
+        "tmdb_original_language": tmdb_original_language,
+        "tmdb_cast": tmdb_cast,
+        "tmdb_overview": series.tmdb_overview,
+        "tmdb_poster_path": series.tmdb_poster_path,
+        "tmdb_backdrop_path": series.tmdb_backdrop_path,
+        "tmdb_genres": series.tmdb_genres,
+        "tmdb_release_date": _iso_date(series.tmdb_release_date),
+    }
+
+
 @router.get("")
 def list_series(
     provider_id: str,
@@ -253,6 +293,7 @@ def series_seasons(series_id: str, force_refresh: bool = False, db: Session = De
                 "provider_series_id": s.provider_series_id,
                 "source": "database",
                 "seasons": seasons_out,
+                **_series_tmdb_payload(s),
             }
 
     try:
@@ -338,6 +379,7 @@ def series_seasons(series_id: str, force_refresh: bool = False, db: Session = De
         "provider_series_id": s.provider_series_id,
         "source": "provider",
         "seasons": seasons_out,
+        **_series_tmdb_payload(s),
     }
 
 
