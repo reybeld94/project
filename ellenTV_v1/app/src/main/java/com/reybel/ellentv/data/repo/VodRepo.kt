@@ -53,6 +53,21 @@ class VodRepo {
         )
     }
 
+    suspend fun fetchSeriesPage(
+        providerId: String,
+        categoryExtId: Int?,
+        limit: Int,
+        offset: Int
+    ): SeriesListResponse {
+        return api.getSeries(
+            providerId = providerId,
+            categoryExtId = categoryExtId,
+            limit = limit,
+            offset = offset,
+            activeOnly = true
+        )
+    }
+
     suspend fun fetchCollections(
         enabled: Boolean? = true,
         limit: Int = 50,

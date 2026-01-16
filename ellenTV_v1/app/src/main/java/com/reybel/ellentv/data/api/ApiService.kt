@@ -97,6 +97,16 @@ interface ApiService {
         @Query("active_only") activeOnly: Boolean = true
     ): SeriesListResponse
 
+    @GET("series")
+    suspend fun getSeries(
+        @Query("provider_id") providerId: String,
+        @Query("category_ext_id") categoryExtId: Int? = null,
+        @Query("q") q: String? = null,
+        @Query("limit") limit: Int = 60,
+        @Query("offset") offset: Int = 0,
+        @Query("active_only") activeOnly: Boolean = true
+    ): SeriesListResponse
+
     @GET("series/{series_id}/seasons")
     suspend fun getSeriesSeasons(
         @Path("series_id") seriesId: String
