@@ -2,6 +2,12 @@ package com.reybel.ellentv.data.api
 
 import com.squareup.moshi.Json
 
+// Helper function to resolve TMDB image paths
+private fun resolveTmdbImagePath(path: String?, size: String): String? {
+    if (path.isNullOrBlank()) return null
+    return if (path.startsWith("http")) path else "https://image.tmdb.org/t/p/$size$path"
+}
+
 data class ProviderOut(
     val id: String,
     val name: String,
@@ -200,13 +206,13 @@ data class VodItem(
     val posterUrl: String?
         get() = customPosterUrl
             ?: poster
-            ?: tmdbPosterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+            ?: resolveTmdbImagePath(tmdbPosterPath, "w500")
             ?: streamIcon
 
     val backdropUrl: String?
         get() = backdrop
-            ?: tmdbBackdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
-            ?: backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+            ?: resolveTmdbImagePath(tmdbBackdropPath, "w1280")
+            ?: resolveTmdbImagePath(backdropPath, "w1280")
             ?: posterUrl
 
     val displayTitle: String
