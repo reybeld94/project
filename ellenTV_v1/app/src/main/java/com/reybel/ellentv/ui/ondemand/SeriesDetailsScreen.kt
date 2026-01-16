@@ -505,7 +505,7 @@ fun SeriesDetailsScreen(
                     rows = GridCells.Fixed(2),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp),
+                        .height(260.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 8.dp)
@@ -710,15 +710,15 @@ private fun CompactEpisodeCard(
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.5.dp, borderColor),
         modifier = modifier
-            .width(340.dp)
-            .height(145.dp)
+            .width(280.dp)
+            .height(120.dp)
             .scale(scale)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     ) {
         Row(
             modifier = Modifier
-                .padding(14.dp)
+                .padding(12.dp)
                 .fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -734,14 +734,14 @@ private fun CompactEpisodeCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp),
+                        .size(34.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "$episodeNumber",
                         color = if (isFocused) CyanAccent else Color.White,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleSmall
                     )
                 }
             }
@@ -754,7 +754,7 @@ private fun CompactEpisodeCard(
                 Text(
                     text = episode.title ?: "Episode $episodeNumber",
                     color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge.copy(
+                    style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
                     maxLines = 2,
@@ -782,14 +782,14 @@ private fun CompactEpisodeCard(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Box(
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(30.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Play",
                         tint = if (isFocused) CyanAccent else Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
