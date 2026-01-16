@@ -143,21 +143,32 @@ fun OnDemandScreen(
     val scrollIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
     LaunchedEffect(filteredCollections) {
-        if (focusedItem == null && filteredCollections.isNotEmpty()) {
-            focusedItem = filteredCollections.firstOrNull()?.items?.firstOrNull()
+        val firstFocusableIndex = filteredCollections.indexOfFirst { it.items.isNotEmpty() }
+        if (firstFocusableIndex >= 0) {
+            if (filteredCollections.getOrNull(focusedCollectionIndex)?.items?.isNotEmpty() != true) {
+                focusedCollectionIndex = firstFocusableIndex
+            }
+            if (focusedItem == null) {
+                focusedItem = filteredCollections[firstFocusableIndex].items.firstOrNull()
+            }
         }
     }
 
-    LaunchedEffect(filteredCollections, initialFocusRequested) {
-        if (!initialFocusRequested && filteredCollections.isNotEmpty() &&
-            filteredCollections.firstOrNull()?.items?.isNotEmpty() == true) {
+    LaunchedEffect(filteredCollections, focusedCollectionIndex, initialFocusRequested) {
+        val canRequestFocus = filteredCollections.getOrNull(focusedCollectionIndex)
+            ?.items
+            ?.isNotEmpty() == true
+        if (!initialFocusRequested && canRequestFocus) {
             collectionFocusRequester.requestFocus()
             initialFocusRequested = true
         }
     }
 
     LaunchedEffect(focusedCollectionIndex) {
-        if (initialFocusRequested) {
+        val canRequestFocus = filteredCollections.getOrNull(focusedCollectionIndex)
+            ?.items
+            ?.isNotEmpty() == true
+        if (initialFocusRequested && canRequestFocus) {
             collectionFocusRequester.requestFocus()
         }
     }
