@@ -2,10 +2,16 @@ package com.reybel.ellentv.ui.ondemand
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -110,6 +116,15 @@ fun OnDemandScreen(
     var selectedItem by remember { mutableStateOf<VodItem?>(null) }
     var savedProgress by remember { mutableStateOf<com.reybel.ellentv.data.repo.PlaybackProgress?>(null) }
 
+    // Create progress map for Continue Watching items
+    val progressMap = remember(ui.collections) {
+        val progressCache = com.reybel.ellentv.data.repo.PlaybackProgressCache(context)
+        val allProgress = progressCache.getAllResumable()
+        allProgress.associate { progress ->
+            progress.contentId to (progress.progressPercentage / 100f)
+        }
+    }
+
     BackHandler(enabled = selectedItem != null && !showSearchOverlay) {
         selectedItem = null
     }
@@ -175,7 +190,7 @@ fun OnDemandScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -262,15 +277,16 @@ fun OnDemandScreen(
                         scrollIndexByCollection.value = scrollIndexByCollection.value
                             .toMutableMap()
                             .apply { put(collection.collectionId, newIndex) }
-                    }
+                    },
+                    progressMap = if (collection.collectionId == "continue_watching") progressMap else emptyMap()
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             OnDemandMetadataPanel(item = focusedItem)
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             AnimatedVisibility(
                 visible = nextCollection != null,
@@ -368,17 +384,39 @@ private fun CollectionRow(
     initialFocusedIndex: Int,
     initialScrollIndex: Int,
     onFocusedIndexChange: (Int) -> Unit,
-    onScrollIndexChange: (Int) -> Unit
+    onScrollIndexChange: (Int) -> Unit,
+    progressMap: Map<String, Float> = emptyMap()
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = title,
-            color = Color.White,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+            )
+
+            // Position indicator
+            if (collection.items.isNotEmpty()) {
+                val visibleStart = (rowState.firstVisibleItemIndex + 1).coerceAtMost(collection.total)
+                val visibleEnd = (rowState.firstVisibleItemIndex +
+                    rowState.layoutInfo.visibleItemsInfo.size).coerceAtMost(collection.total)
+
+                Text(
+                    text = "$visibleStart-$visibleEnd of ${collection.total}",
+                    color = AccentColor.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+        }
 
         if (collection.error != null) {
             Text(
@@ -449,6 +487,7 @@ private fun CollectionRow(
                         },
                         onNavigateUp = onNavigateUp,
                         onNavigateDown = onNavigateDown,
+                        progressPercentage = progressMap[item.id],
                         modifier = if (itemIndex == targetFocusIndex) Modifier.focusRequester(focusRequester) else Modifier
                     )
                 }
@@ -465,23 +504,56 @@ private fun OnDemandPosterCard(
     onFocused: () -> Unit,
     onNavigateUp: () -> Unit,
     onNavigateDown: () -> Unit,
+    progressPercentage: Float? = null,
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
-    val borderColor = if (focused) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.12f)
-    val backgroundColor = if (focused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f)
-    val cardWidth = if (focused) 280.dp else 128.dp
+
+    // Animated properties for smooth transitions
+    val animatedBorderColor by animateColorAsState(
+        targetValue = if (focused) AccentColor else Color.White.copy(alpha = 0.12f),
+        animationSpec = tween(durationMillis = 200),
+        label = "borderColor"
+    )
+    val animatedBackgroundColor by animateColorAsState(
+        targetValue = if (focused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+        animationSpec = tween(durationMillis = 200),
+        label = "backgroundColor"
+    )
+    val animatedCardWidth by animateDpAsState(
+        targetValue = if (focused) 280.dp else 128.dp,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+        label = "cardWidth"
+    )
+    val animatedElevation by animateDpAsState(
+        targetValue = if (focused) 8.dp else 2.dp,
+        animationSpec = tween(durationMillis = 200),
+        label = "elevation"
+    )
+    val animatedBorderWidth by animateDpAsState(
+        targetValue = if (focused) 3.dp else 1.dp,
+        animationSpec = tween(durationMillis = 200),
+        label = "borderWidth"
+    )
+
     val cardHeight = 180.dp
-    val imageUrl = if (focused) item.backdropUrl ?: item.posterUrl else item.posterUrl
+    // Use backdrop for focused cards if available, otherwise poster
+    // This prevents image reload when focusing
+    val imageUrl = if (focused && item.backdropUrl != null) {
+        item.backdropUrl
+    } else {
+        item.posterUrl
+    }
 
     Surface(
         onClick = { onOpenDetails(item) },
-        color = backgroundColor,
-        shape = RectangleShape,
-        border = BorderStroke(2.dp, borderColor),
-        tonalElevation = if (focused) 6.dp else 2.dp,
+        color = animatedBackgroundColor,
+        shape = RoundedCornerShape(if (focused) 8.dp else 4.dp),
+        border = BorderStroke(animatedBorderWidth, animatedBorderColor),
+        tonalElevation = animatedElevation,
+        shadowElevation = if (focused) 12.dp else 0.dp,
         modifier = modifier
-            .width(cardWidth)
+            .width(animatedCardWidth)
             .height(cardHeight)
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -512,25 +584,78 @@ private fun OnDemandPosterCard(
             }
             .focusable()
     ) {
-        if (!imageUrl.isNullOrBlank()) {
-            OptimizedAsyncImage(
-                url = imageUrl,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                targetSizePx = 512
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No image",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!imageUrl.isNullOrBlank()) {
+                OptimizedAsyncImage(
+                    url = imageUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    targetSizePx = 512
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No image",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Content type badge (top-right corner)
+            item.contentType?.let { contentType ->
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                    color = when (contentType.lowercase()) {
+                        "movie" -> Color(0xFF2196F3).copy(alpha = 0.9f)
+                        "series" -> Color(0xFF9C27B0).copy(alpha = 0.9f)
+                        else -> Color.Gray.copy(alpha = 0.9f)
+                    },
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = when (contentType.lowercase()) {
+                            "movie" -> "MOVIE"
+                            "series" -> "SERIES"
+                            else -> contentType.uppercase()
+                        },
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Progress bar overlay
+            progressPercentage?.let { progress ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomStart)
+                ) {
+                    // Progress bar
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                .height(6.dp)
+                                .background(AccentColor)
+                        )
+                    }
+                }
             }
         }
     }
@@ -551,50 +676,131 @@ private fun OnDemandMetadataPanel(item: VodItem?) {
     val rating = item?.tmdbVoteAverage?.let { String.format("%.1f", it) }
     val cast = item?.resolvedCast()?.take(3)?.joinToString(", ")
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Text(
-            text = item?.displayTitle ?: "Select a title",
-            color = Color.White,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        val metaParts = listOfNotNull(
-            rating?.let { "★ $it" },
-            year,
-            genre
-        )
-        if (metaParts.isNotEmpty()) {
-            Text(
-                text = metaParts.joinToString(" • "),
-                color = Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodyMedium
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Background with gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
             )
-        }
 
-        cast?.let {
+            // Content
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+            // Title with gradient background
             Text(
-                text = it,
-                color = Color.White.copy(alpha = 0.45f),
-                style = MaterialTheme.typography.bodySmall
+                text = item?.displayTitle ?: "Select a title",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+
+            // Rating, Year, Genre in a Row with better styling
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                rating?.let {
+                    Surface(
+                        color = AccentColor.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(1.dp, AccentColor.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "★",
+                                color = Color(0xFFFFD700),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Text(
+                                text = it,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
+                    }
+                }
+
+                year?.let {
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+
+                genre?.let {
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            cast?.let {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Cast:",
+                        color = AccentColor.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = synopsis,
+                color = Color.White.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    lineHeight = 20.sp
+                ),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            }
         }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = synopsis,
-            color = Color.White.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
