@@ -89,6 +89,26 @@ interface ApiService {
         @Query("synced") synced: Boolean? = true
     ): VodListResponse  // Ya tienes este modelo, reutilízalo
 
+    @GET("series/all")
+    suspend fun searchSeriesAll(
+        @Query("q") query: String,
+        @Query("limit") limit: Int = 30,
+        @Query("offset") offset: Int = 0,
+        @Query("active_only") activeOnly: Boolean = true
+    ): SeriesListResponse
+
+    @GET("series/{series_id}/seasons")
+    suspend fun getSeriesSeasons(
+        @Path("series_id") seriesId: String
+    ): SeriesSeasonsResponse
+
+    @GET("series/episode/play")
+    suspend fun getSeriesEpisodePlay(
+        @Query("provider_id") providerId: String,
+        @Query("episode_id") episodeId: Int,
+        @Query("format") format: String
+    ): PlayResponse
+
     // ---------- COLLECTIONS ----------
 
     @GET("collections")

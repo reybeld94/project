@@ -25,8 +25,7 @@ import androidx.compose.ui.unit.dp
 
 enum class AppSection(val label: String) {
     LIVE("Live TV"),
-    MOVIES("Movies On Demand"),
-    SERIES("Series On Demand"),
+    ON_DEMAND("On Demand"),
     SETTINGS("Settings")
 }
 
@@ -102,14 +101,9 @@ fun SideMenuDrawer(
                             onClick = { onSelect(AppSection.LIVE) }
                         )
                         DrawerItem(
-                            text = AppSection.MOVIES.label,
-                            selected = current == AppSection.MOVIES,
-                            onClick = { onSelect(AppSection.MOVIES) }
-                        )
-                        DrawerItem(
-                            text = AppSection.SERIES.label,
-                            selected = current == AppSection.SERIES,
-                            onClick = { onSelect(AppSection.SERIES) }
+                            text = AppSection.ON_DEMAND.label,
+                            selected = current == AppSection.ON_DEMAND,
+                            onClick = { onSelect(AppSection.ON_DEMAND) }
                         )
                         DrawerItem(
                             text = AppSection.SETTINGS.label,

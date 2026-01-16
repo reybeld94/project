@@ -5,9 +5,14 @@ import com.reybel.ellentv.data.api.ApiClient
 import com.reybel.ellentv.data.api.ApiService
 import com.reybel.ellentv.data.api.CollectionItemsResponse
 import com.reybel.ellentv.data.api.CollectionOut
+import com.reybel.ellentv.data.api.OnDemandSearchResponse
 import com.reybel.ellentv.data.api.ProviderCategoryOut
 import com.reybel.ellentv.data.api.ProviderOut
+import com.reybel.ellentv.data.api.SeriesListResponse
+import com.reybel.ellentv.data.api.SeriesSeasonsResponse
 import com.reybel.ellentv.data.api.VodListResponse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 class VodRepo {
     private val api = ApiClient.retrofit.create(ApiService::class.java)
@@ -76,6 +81,42 @@ class VodRepo {
         )
     }
 
+    suspend fun searchSeries(
+        query: String,
+        limit: Int = 30,
+        offset: Int = 0
+    ): SeriesListResponse {
+        return api.searchSeriesAll(
+            query = query,
+            limit = limit,
+            offset = offset,
+            activeOnly = true
+        )
+    }
+
+    suspend fun searchAll(
+        query: String,
+        limit: Int = 30,
+        offset: Int = 0
+    ): OnDemandSearchResponse = coroutineScope {
+        val moviesLimit = limit / 2
+        val seriesLimit = limit - moviesLimit
+        val moviesOffset = offset / 2
+        val seriesOffset = offset / 2
+
+        val moviesDeferred = async { searchMovies(query, moviesLimit, moviesOffset) }
+        val seriesDeferred = async { searchSeries(query, seriesLimit, seriesOffset) }
+
+        val movies = moviesDeferred.await()
+        val series = seriesDeferred.await()
+
+        OnDemandSearchResponse(
+            items = movies.items + series.items,
+            totalMovies = movies.total,
+            totalSeries = series.total
+        )
+    }
+
     suspend fun fetchCollectionItems(
         collectionIdOrSlug: String,
         page: Int = 1,
@@ -86,6 +127,22 @@ class VodRepo {
             page = page,
             staleWhileRevalidate = staleWhileRevalidate
         )
+    }
+
+    suspend fun fetchSeriesSeasons(seriesId: String): SeriesSeasonsResponse {
+        return api.getSeriesSeasons(seriesId)
+    }
+
+    suspend fun fetchSeriesEpisodePlayUrl(
+        providerId: String,
+        episodeId: Int,
+        format: String
+    ): String {
+        return api.getSeriesEpisodePlay(
+            providerId = providerId,
+            episodeId = episodeId,
+            format = format
+        ).url
     }
 
     /**

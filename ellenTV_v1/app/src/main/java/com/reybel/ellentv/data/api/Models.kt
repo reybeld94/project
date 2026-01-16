@@ -193,7 +193,8 @@ data class VodItem(
     @Json(name = "release_date") val releaseDate: String? = null,
     @Json(name = "backdrop_path") val backdropPath: String? = null,
     val backdrop: String? = null,
-    @Json(name = "stream_url") val streamUrl: String? = null
+    @Json(name = "stream_url") val streamUrl: String? = null,
+    @Json(name = "content_type") val contentType: String? = null
 ) {
     // ══════ PROPIEDADES ACTUALIZADAS ══════
     val posterUrl: String?
@@ -217,3 +218,38 @@ data class VodItem(
     // ══════════════════════════════════════
 }
 
+data class SeasonInfo(
+    @Json(name = "season_number") val seasonNumber: Int,
+    val name: String? = null,
+    val cover: String? = null,
+    @Json(name = "episode_count") val episodeCount: Int = 0,
+    val episodes: List<EpisodeInfo> = emptyList()
+)
+
+data class EpisodeInfo(
+    @Json(name = "episode_id") val episodeId: Int,
+    @Json(name = "episode_number") val episodeNumber: Int,
+    val title: String? = null,
+    @Json(name = "container_extension") val containerExtension: String? = null,
+    @Json(name = "duration_secs") val durationSecs: Int? = null
+)
+
+data class SeriesListResponse(
+    val total: Int,
+    val items: List<VodItem> = emptyList()
+)
+
+data class SeriesSeasonsResponse(
+    @Json(name = "series_id") val seriesId: String,
+    @Json(name = "provider_id") val providerId: String,
+    val seasons: List<SeasonInfo> = emptyList()
+)
+
+data class OnDemandSearchResponse(
+    val items: List<VodItem> = emptyList(),
+    @Json(name = "total_movies") val totalMovies: Int = 0,
+    @Json(name = "total_series") val totalSeries: Int = 0
+) {
+    val total: Int
+        get() = totalMovies + totalSeries
+}

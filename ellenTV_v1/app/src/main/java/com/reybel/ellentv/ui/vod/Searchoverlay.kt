@@ -118,6 +118,7 @@ fun SearchOverlay(
     onSelectItem: (VodItem) -> Unit,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit,
+    title: String = "Search Movies",
     modifier: Modifier = Modifier
 ) {
     // BackHandler para cerrar
@@ -170,7 +171,7 @@ fun SearchOverlay(
                         modifier = Modifier.size(28.dp)
                     )
                     Text(
-                        text = "Search Movies",
+                        text = title,
                         color = Color.White,
                         style = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = FontWeight.Bold
