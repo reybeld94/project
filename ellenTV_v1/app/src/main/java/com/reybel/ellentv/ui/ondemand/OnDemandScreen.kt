@@ -63,6 +63,8 @@ import com.reybel.ellentv.ui.components.PosterSkeletonCard
 import com.reybel.ellentv.ui.vod.MovieDetailsScreen
 import com.reybel.ellentv.ui.vod.SearchOverlay
 import com.reybel.ellentv.ui.vod.SearchState
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 // Color de acento
 private val AccentColor = Color(0xFF00D9FF)
@@ -150,7 +152,6 @@ fun OnDemandScreen(
     var focusedCollectionIndex by remember { mutableIntStateOf(0) }
     var focusedItem by remember { mutableStateOf<VodItem?>(null) }
     val collectionFocusRequester = remember { FocusRequester() }
-    var initialFocusRequested by remember { mutableStateOf(false) }
     val focusedIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     val scrollIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
@@ -163,25 +164,6 @@ fun OnDemandScreen(
             if (focusedItem == null) {
                 focusedItem = filteredCollections[firstFocusableIndex].items.firstOrNull()
             }
-        }
-    }
-
-    LaunchedEffect(filteredCollections, focusedCollectionIndex, initialFocusRequested) {
-        val canRequestFocus = filteredCollections.getOrNull(focusedCollectionIndex)
-            ?.items
-            ?.isNotEmpty() == true
-        if (!initialFocusRequested && canRequestFocus) {
-            collectionFocusRequester.requestFocus()
-            initialFocusRequested = true
-        }
-    }
-
-    LaunchedEffect(focusedCollectionIndex) {
-        val canRequestFocus = filteredCollections.getOrNull(focusedCollectionIndex)
-            ?.items
-            ?.isNotEmpty() == true
-        if (initialFocusRequested && canRequestFocus) {
-            collectionFocusRequester.requestFocus()
         }
     }
 
@@ -427,6 +409,17 @@ private fun CollectionRow(
         LaunchedEffect(rowState, collection.items.size) {
             snapshotFlow { rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
                 .collect { lastIdx -> onRequestMore(collection.collectionId, lastIdx) }
+        }
+
+        LaunchedEffect(collection.collectionId, targetFocusIndex, collection.items.size) {
+            if (collection.items.isNotEmpty()) {
+                snapshotFlow {
+                    rowState.layoutInfo.visibleItemsInfo.any { it.index == targetFocusIndex }
+                }
+                    .filter { it }
+                    .first()
+                focusRequester.requestFocus()
+            }
         }
 
         LaunchedEffect(rowState) {
