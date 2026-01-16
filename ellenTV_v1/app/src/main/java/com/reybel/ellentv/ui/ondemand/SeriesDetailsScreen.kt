@@ -74,11 +74,14 @@ data class SeriesDetailsUiState(
     val backdropUrl: String? = null,
     val posterUrl: String? = null,
     val voteAverage: Double? = null,
+    val originalLanguage: String? = null,
+    val releaseDate: String? = null,
     val genres: List<String> = emptyList(),
     val cast: List<String> = emptyList(),
     val seasons: List<SeasonInfo> = emptyList(),
     val selectedSeasonIndex: Int = 0,
     val providerId: String? = null,
+    val tmdbStatus: String? = null,
     val error: String? = null
 )
 
@@ -103,8 +106,11 @@ fun SeriesDetailsScreen(
                 backdropUrl = item.backdropUrl,
                 posterUrl = item.posterUrl,
                 voteAverage = item.tmdbVoteAverage,
-                genres = item.genreNames ?: emptyList(),
-                cast = item.resolvedCast() ?: emptyList()
+                originalLanguage = item.tmdbOriginalLanguage,
+                releaseDate = item.tmdbReleaseDate ?: item.releaseDate,
+                genres = item.tmdbGenres ?: item.genreNames ?: emptyList(),
+                cast = item.resolvedCast() ?: emptyList(),
+                tmdbStatus = item.tmdbStatus
             )
         )
     }
@@ -120,10 +126,37 @@ fun SeriesDetailsScreen(
     LaunchedEffect(item.id) {
         try {
             val response = repo.fetchSeriesSeasons(item.id)
+            val updatedBackdrop = resolveTmdbImageUrl(response.tmdbBackdropPath, "w1280")
+                ?: uiState.backdropUrl
+            val updatedPoster = resolveTmdbImageUrl(response.tmdbPosterPath, "w500")
+                ?: uiState.posterUrl
+            val updatedOverview = response.tmdbOverview
+                ?.takeIf { it.isNotBlank() }
+                ?: uiState.overview
+            val updatedGenres = response.tmdbGenres
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?.ifEmpty { null }
+                ?: uiState.genres
+            val updatedCast = response.tmdbCast
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?.ifEmpty { null }
+                ?: uiState.cast
             uiState = uiState.copy(
                 isLoading = false,
                 seasons = response.seasons,
                 providerId = response.providerId,
+                title = response.tmdbTitle?.takeIf { it.isNotBlank() } ?: uiState.title,
+                overview = updatedOverview,
+                backdropUrl = updatedBackdrop,
+                posterUrl = updatedPoster,
+                voteAverage = response.tmdbVoteAverage ?: uiState.voteAverage,
+                originalLanguage = response.tmdbOriginalLanguage ?: uiState.originalLanguage,
+                releaseDate = response.tmdbReleaseDate ?: uiState.releaseDate,
+                genres = updatedGenres,
+                cast = updatedCast,
+                tmdbStatus = response.tmdbStatus ?: uiState.tmdbStatus,
                 error = null
             )
         } catch (e: Exception) {
@@ -212,9 +245,10 @@ fun SeriesDetailsScreen(
                 .padding(start = 48.dp, end = 48.dp, top = 40.dp, bottom = 32.dp)
                 .graphicsLayer { alpha = contentAlpha }
         ) {
-            val year = item.releaseDate?.extractYearFromDate() ?: item.displayTitle.extractYearFromTitle()
+            val year = uiState.releaseDate?.extractYearFromDate()
+                ?: uiState.title.extractYearFromTitle()
             val rating = uiState.voteAverage?.let { String.format("%.1f", it) }
-            val language = item.tmdbOriginalLanguage?.uppercase()
+            val language = uiState.originalLanguage?.uppercase()
             val castText = uiState.cast.take(4).joinToString(", ")
             val genreText = uiState.genres.joinToString(" • ")
             val selectedSeason = uiState.seasons.getOrNull(uiState.selectedSeasonIndex)
@@ -278,7 +312,7 @@ fun SeriesDetailsScreen(
                     }
                     year?.let { MetadataChip(text = it) }
                     language?.let { MetadataChip(text = it) }
-                    if (item.tmdbStatus == "synced") {
+                    if (uiState.tmdbStatus == "synced") {
                         MetadataChip(
                             text = "TMDB",
                             backgroundColor = Color(0xFF01B4E4).copy(alpha = 0.2f),
@@ -749,6 +783,11 @@ private fun VodItem.resolvedCast(): List<String>? {
         ?.map { it.trim() }
         ?.filter { it.isNotBlank() }
         ?.ifEmpty { null }
+}
+
+private fun resolveTmdbImageUrl(path: String?, size: String): String? {
+    if (path.isNullOrBlank()) return null
+    return if (path.startsWith("http")) path else "https://image.tmdb.org/t/p/$size$path"
 }
 
 private fun String.extractYearFromTitle(): String? {
