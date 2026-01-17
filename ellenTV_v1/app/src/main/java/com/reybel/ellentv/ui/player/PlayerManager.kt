@@ -170,12 +170,12 @@ class PlayerManager(context: Context) {
                 .build()
 
             BufferLevel.HIGH -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(10000, 50000, 5000, 10000)
+                .setBufferDurationsMs(20000, 50000, 20000, 25000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             BufferLevel.MAXIMUM -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15000, 60000, 8000, 15000)
+                .setBufferDurationsMs(25000, 60000, 25000, 30000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         }
@@ -700,7 +700,7 @@ class PlayerManager(context: Context) {
                     MediaItem.LiveConfiguration.Builder()
                         .setMaxPlaybackSpeed(1.05f)
                         .setMinPlaybackSpeed(0.95f)
-                        .setTargetOffsetMs(10_000L)  // Aumentado de 5s a 10s para más margen
+                        .setTargetOffsetMs(20_000L)  // Aumentado de 10s a 20s para evitar freezes
                         .build()
                 )
                 Log.d("ELLENTV_PLAYER", "Configured as LIVE stream")
@@ -886,6 +886,6 @@ class PlayerManager(context: Context) {
 enum class BufferLevel(val label: String) {
     LOW("Bajo (3-15s)"),
     NORMAL("Normal (5-30s)"),
-    HIGH("Alto (10-50s)"),
-    MAXIMUM("Máximo (15-60s)")
+    HIGH("Alto (20-50s)"),
+    MAXIMUM("Máximo (25-60s)")
 }
