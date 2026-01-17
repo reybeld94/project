@@ -50,7 +50,7 @@ class PlayerManager(context: Context) {
     private var currentUrls: List<String> = emptyList()
     private var currentUrlIndex = 0
     private var retryCount = 0
-    private val maxRetriesPerUrl = 3
+    private val maxRetriesPerUrl = 10  // Aumentado de 3 a 10 para mayor persistencia
 
     // Track si el contenido actual es VOD o Live
     private var isVodContent = false
@@ -74,8 +74,8 @@ class PlayerManager(context: Context) {
     private var lastBufferUpgradeAt = 0L
     private var needsBufferUpgrade = false
 
-    private val rebufferUpgradeThreshold = 3
-    private val minBufferUpgradeIntervalMs = 120_000L
+    private val rebufferUpgradeThreshold = 2  // Reducido de 3 a 2 para respuesta más rápida
+    private val minBufferUpgradeIntervalMs = 45_000L  // Reducido de 120s a 45s
 
     // Crossfade
     private var isCrossfading = false
@@ -92,7 +92,7 @@ class PlayerManager(context: Context) {
     private val _player = MutableStateFlow(createPlayer(BufferLevel.NORMAL))
     val playerFlow: StateFlow<ExoPlayer> = _player.asStateFlow()
 
-    private val DEFAULT_LIVE_BUFFER = BufferLevel.HIGH
+    private val DEFAULT_LIVE_BUFFER = BufferLevel.MAXIMUM  // Cambiado de HIGH a MAXIMUM para máxima estabilidad
 
     val player: ExoPlayer
         get() = _player.value
@@ -272,9 +272,9 @@ class PlayerManager(context: Context) {
 
                         if (!isVodContent) {
                             scope.launch {
-                                delay(120_000)
+                                delay(180_000)  // Aumentado de 2min a 3min
                                 if (p === player && p.playbackState == Player.STATE_READY) {
-                                    Log.i("ELLENTV_BUFFER", "Stream stable for 2min - resetting rebuffer count")
+                                    Log.i("ELLENTV_BUFFER", "Stream stable for 3min - resetting rebuffer count")
                                     rebufferCount = 0
                                 }
                             }
@@ -396,7 +396,7 @@ class PlayerManager(context: Context) {
     private fun startHealthMonitoring() {
         healthMonitorJob = scope.launch {
             while (true) {
-                delay(3000)
+                delay(5000)  // Aumentado de 3s a 5s para ser menos agresivo
 
                 if (!isVodContent) {
                     checkBufferNotProgressing()
@@ -437,8 +437,8 @@ class PlayerManager(context: Context) {
         val coolDown = now - lastNoProgressReconnectAt
 
         // Para VOD: timeout más largo (el servidor puede tardar)
-        val STUCK_MS = if (isVodContent) 30_000L else 20_000L
-        val COOLDOWN_MS = 20_000L
+        val STUCK_MS = if (isVodContent) 40_000L else 35_000L  // Aumentado: VOD 30s→40s, Live 20s→35s
+        val COOLDOWN_MS = 40_000L  // Aumentado de 20s a 40s
 
         if (stuckFor >= STUCK_MS && coolDown >= COOLDOWN_MS) {
             lastNoProgressReconnectAt = now
@@ -466,11 +466,11 @@ class PlayerManager(context: Context) {
         val p = player
 
         if (isVodContent) return false
-        if (liveStallRecoveryAttempts >= 2) return false
+        if (liveStallRecoveryAttempts >= 5) return false  // Aumentado de 2 a 5 intentos
         if (p.mediaItemCount == 0) return false
 
         liveStallRecoveryAttempts++
-        val target = (p.currentPosition - 400L).coerceAtLeast(0L) // Minimizar retroceso visible
+        val target = (p.currentPosition - 2000L).coerceAtLeast(0L) // Aumentado de -400ms a -2000ms
         val wasPlaying = p.isPlaying
 
         Log.w(
@@ -505,9 +505,9 @@ class PlayerManager(context: Context) {
 
         if (currentPosition == lastPosition && currentPosition > 0) {
             positionStuckCount++
-            Log.w("ELLENTV_HEALTH", "Position stuck: $positionStuckCount/5")
+            Log.w("ELLENTV_HEALTH", "Position stuck: $positionStuckCount/10")
 
-            if (positionStuckCount >= 5) {
+            if (positionStuckCount >= 10) {  // Aumentado de 5 a 10 (50 segundos)
                 Log.e("ELLENTV_HEALTH", "Stream frozen! Reconnecting...")
                 onHealthIssue?.invoke("Stream congelado")
                 positionStuckCount = 0
@@ -523,9 +523,9 @@ class PlayerManager(context: Context) {
 
         if (currentBitrate == 0L && player.isPlaying) {
             zeroBitrateCount++
-            Log.w("ELLENTV_HEALTH", "Zero bitrate: $zeroBitrateCount/6")
+            Log.w("ELLENTV_HEALTH", "Zero bitrate: $zeroBitrateCount/12")
 
-            if (zeroBitrateCount >= 6) {
+            if (zeroBitrateCount >= 12) {  // Aumentado de 6 a 12 (60 segundos)
                 Log.e("ELLENTV_HEALTH", "No data! Reconnecting...")
                 onHealthIssue?.invoke("Sin datos del servidor")
                 zeroBitrateCount = 0
@@ -583,7 +583,7 @@ class PlayerManager(context: Context) {
             }
         }
 
-        val delayMs = (1000L * (1 shl (retryCount - 1))).coerceAtMost(4000L)
+        val delayMs = (1000L * (1 shl (retryCount - 1))).coerceAtMost(12000L)  // Aumentado de 4s a 12s
         val urlLabel = "URL ${currentUrlIndex + 1}/${currentUrls.size}"
 
         Log.w("ELLENTV_PLAYER", "Retry $retryCount/$maxRetriesPerUrl for $urlLabel in ${delayMs}ms")
@@ -700,7 +700,7 @@ class PlayerManager(context: Context) {
                     MediaItem.LiveConfiguration.Builder()
                         .setMaxPlaybackSpeed(1.05f)
                         .setMinPlaybackSpeed(0.95f)
-                        .setTargetOffsetMs(5_000L)
+                        .setTargetOffsetMs(10_000L)  // Aumentado de 5s a 10s para más margen
                         .build()
                 )
                 Log.d("ELLENTV_PLAYER", "Configured as LIVE stream")
