@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.deps import get_db
-from app.models import Provider, TmdbCollection, TmdbCollectionCache, VodStream
+from app.models import Provider, SeriesItem, TmdbCollection, TmdbCollectionCache, VodStream
 from app.routers.tmdb import get_or_create_cfg
 from app.schemas import (
     CollectionCacheOut,
@@ -257,7 +257,7 @@ def _augment_payload_with_catalog(payload: dict, db: Session) -> dict:
         return payload
 
     tmdb_synced_values = ["synced", "sync"]
-    rows = db.execute(
+    vod_rows = db.execute(
         select(VodStream, Provider)
         .join(Provider, Provider.id == VodStream.provider_id)
         .where(VodStream.tmdb_id.in_(tmdb_ids))
@@ -265,37 +265,52 @@ def _augment_payload_with_catalog(payload: dict, db: Session) -> dict:
         .where(VodStream.is_active == True)
     ).all()
 
-    catalog_by_tmdb = {
+    series_rows = db.execute(
+        select(SeriesItem)
+        .where(SeriesItem.tmdb_id.in_(tmdb_ids))
+        .where(func.lower(SeriesItem.tmdb_status).in_(tmdb_synced_values))
+        .where(SeriesItem.is_active == True)
+    ).scalars().all()
+
+    vod_by_tmdb = {
         vod.tmdb_id: (vod, provider)
-        for vod, provider in rows
+        for vod, provider in vod_rows
         if vod.tmdb_id is not None
     }
+    series_by_tmdb = {series.tmdb_id: series for series in series_rows if series.tmdb_id is not None}
 
     filtered_items = []
     for item in items:
         if not isinstance(item, dict):
             continue
         tmdb_id = item.get("id")
-        entry = catalog_by_tmdb.get(tmdb_id)
-        if not entry:
+        vod_entry = vod_by_tmdb.get(tmdb_id)
+        if vod_entry:
+            vod, provider = vod_entry
+            ext = (vod.container_extension or "mp4").lower().strip()
+            stream_url = (
+                f"{provider.base_url.rstrip('/')}/movie/"
+                f"{provider.username}/{provider.password}/{vod.provider_stream_id}.{ext}"
+            )
+            enriched = dict(item)
+            enriched["vod_id"] = str(vod.id)
+            enriched["stream_url"] = stream_url
+            enriched["tmdb_vote_average"] = vod.tmdb_vote_average
+            enriched["tmdb_original_language"] = (vod.tmdb_raw or {}).get("original_language")
+            enriched["tmdb_cast"] = [
+                c.get("name")
+                for c in ((vod.tmdb_raw or {}).get("credits") or {}).get("cast") or []
+                if c.get("name")
+            ][:10]
+            filtered_items.append(enriched)
             continue
-        vod, provider = entry
-        ext = (vod.container_extension or "mp4").lower().strip()
-        stream_url = (
-            f"{provider.base_url.rstrip('/')}/movie/"
-            f"{provider.username}/{provider.password}/{vod.provider_stream_id}.{ext}"
-        )
-        enriched = dict(item)
-        enriched["vod_id"] = str(vod.id)
-        enriched["stream_url"] = stream_url
-        enriched["tmdb_vote_average"] = vod.tmdb_vote_average
-        enriched["tmdb_original_language"] = (vod.tmdb_raw or {}).get("original_language")
-        enriched["tmdb_cast"] = [
-            c.get("name")
-            for c in ((vod.tmdb_raw or {}).get("credits") or {}).get("cast") or []
-            if c.get("name")
-        ][:10]
-        filtered_items.append(enriched)
+
+        series_entry = series_by_tmdb.get(tmdb_id)
+        if series_entry:
+            enriched = dict(item)
+            enriched["vod_id"] = str(series_entry.id)
+            enriched["content_type"] = "series"
+            filtered_items.append(enriched)
 
     filtered_payload = dict(payload)
     filtered_payload[items_key] = filtered_items
