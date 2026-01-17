@@ -498,15 +498,6 @@ class PlayerManager(context: Context) {
 
                     // Analizar frames (si están disponibles)
                     val videoFormat = p.videoFormat
-                    val droppedFrames = try {
-                        p.analyticsCollector.videoFormat?.let {
-                            // Intentar obtener estadísticas de frames
-                            0L  // Placeholder
-                        } ?: 0L
-                    } catch (e: Exception) {
-                        0L
-                    }
-
                     // ALERTA: Buffer peligrosamente bajo
                     if (bufferedAheadMs < 3000) {  // Menos de 3 segundos
                         consecutiveLowBuffer++
