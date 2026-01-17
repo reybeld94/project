@@ -288,7 +288,7 @@ class OnDemandViewModel(
         return repo.fetchVodPlayUrl(vodId)
     }
 
-    suspend fun getSeriesEpisodePlayUrl(providerId: String, episodeId: Int, format: String): String {
+    suspend fun getSeriesEpisodePlayUrl(providerId: String, episodeId: Int, format: String?): String {
         return repo.fetchSeriesEpisodePlayUrl(providerId, episodeId, format)
     }
 

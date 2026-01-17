@@ -90,7 +90,7 @@ data class SeriesDetailsUiState(
 @Composable
 fun SeriesDetailsScreen(
     item: VodItem,
-    onPlay: (providerId: String, episodeId: Int, format: String, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
+    onPlay: (providerId: String, episodeId: Int, format: String?, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -414,10 +414,11 @@ fun SeriesDetailsScreen(
                         onClick = {
                             if (canPlay) {
                                 val episode = episodeToPlay!!
+                                val format = episode.containerExtension?.takeIf { it.isNotBlank() }
                                 onPlay(
                                     providerId!!,
                                     episode.episodeId,
-                                    episode.containerExtension ?: "mp4",
+                                    format,
                                     episode.title ?: item.displayTitle,
                                     lastWatchedProgress?.seasonNumber ?: selectedSeason?.seasonNumber,
                                     lastWatchedProgress?.episodeNumber ?: episode.episodeNumber
@@ -560,10 +561,11 @@ fun SeriesDetailsScreen(
                             episodeNumber = index + 1,
                             onPlay = {
                                 val provider = providerId ?: return@CompactEpisodeCard
+                                val format = episode.containerExtension?.takeIf { it.isNotBlank() }
                                 onPlay(
                                     provider,
                                     episode.episodeId,
-                                    episode.containerExtension ?: "mp4",
+                                    format,
                                     episode.title ?: uiState.title,
                                     selectedSeason?.seasonNumber,
                                     episode.episodeNumber
@@ -694,16 +696,24 @@ private fun SeasonTab(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (isSelected) {
-        CyanAccent.copy(alpha = 0.2f)
-    } else {
-        Color.White.copy(alpha = 0.06f)
+    var isFocused by remember { mutableStateOf(false) }
+
+    val backgroundColor = when {
+        isSelected -> CyanAccent.copy(alpha = 0.2f)
+        isFocused -> CyanAccent.copy(alpha = 0.12f)
+        else -> Color.White.copy(alpha = 0.06f)
     }
 
-    val borderColor = if (isSelected) {
-        CyanAccent.copy(alpha = 0.5f)
-    } else {
-        Color.White.copy(alpha = 0.1f)
+    val borderColor = when {
+        isSelected -> CyanAccent.copy(alpha = 0.5f)
+        isFocused -> CyanAccent.copy(alpha = 0.35f)
+        else -> Color.White.copy(alpha = 0.1f)
+    }
+
+    val textColor = when {
+        isSelected -> CyanAccent
+        isFocused -> CyanAccent.copy(alpha = 0.9f)
+        else -> Color.White.copy(alpha = 0.7f)
     }
 
     Surface(
@@ -712,17 +722,20 @@ private fun SeasonTab(
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, borderColor),
         modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
     ) {
         Text(
             text = season.name ?: "S${season.seasonNumber}",
-            color = if (isSelected) CyanAccent else Color.White.copy(alpha = 0.7f),
+            color = textColor,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                fontWeight = if (isSelected || isFocused) FontWeight.SemiBold else FontWeight.Normal
             ),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
         )
     }
 }
+
 
 @Composable
 private fun CompactEpisodeCard(
