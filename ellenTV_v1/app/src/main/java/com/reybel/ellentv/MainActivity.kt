@@ -815,7 +815,6 @@ fun TvHomeScreen(
                 OnDemandScreen(
                     ui = onDemandUi,
                     searchState = onDemandSearchState,
-                    onFilterChange = { onDemandVm.setFilter(it) },
                     onRequestMore = { collectionId, lastIdx ->
                         onDemandVm.loadMoreIfNeeded(collectionId, lastIdx)
                     },

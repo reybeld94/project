@@ -33,8 +33,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -81,10 +79,9 @@ private val AccentColor = Color(0xFF00D9FF)
 fun OnDemandScreen(
     ui: OnDemandUiState,
     searchState: SearchState,
-    onFilterChange: (ContentFilter) -> Unit,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onPlayMovie: (item: VodItem) -> Unit,
-    onPlayEpisode: (providerId: String, episodeId: Int, format: String, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
+    onPlayEpisode: (providerId: String, episodeId: Int, format: String?, title: String?, seasonNum: Int?, episodeNum: Int?) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onSearchLoadMore: () -> Unit,
@@ -161,11 +158,7 @@ fun OnDemandScreen(
         return
     }
 
-    val filteredCollections = when (ui.currentFilter) {
-        ContentFilter.ALL -> ui.collections
-        ContentFilter.MOVIES -> ui.collections.filter { it.contentType == ContentFilter.MOVIES }
-        ContentFilter.SERIES -> ui.collections.filter { it.contentType == ContentFilter.SERIES }
-    }.filter { collection ->
+    val filteredCollections = ui.collections.filter { collection ->
         // Only show collections that are either loading or have items
         collection.isLoading || collection.items.isNotEmpty()
     }
@@ -205,42 +198,13 @@ fun OnDemandScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "On Demand",
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        )
+                Text(
+                    text = "On Demand",
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold
                     )
-                    FilterChip(
-                        selected = ui.currentFilter == ContentFilter.ALL,
-                        onClick = { onFilterChange(ContentFilter.ALL) },
-                        label = { Text("All") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
-                        )
-                    )
-                    FilterChip(
-                        selected = ui.currentFilter == ContentFilter.MOVIES,
-                        onClick = { onFilterChange(ContentFilter.MOVIES) },
-                        label = { Text("Movies") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
-                        )
-                    )
-                    FilterChip(
-                        selected = ui.currentFilter == ContentFilter.SERIES,
-                        onClick = { onFilterChange(ContentFilter.SERIES) },
-                        label = { Text("Series") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
-                        )
-                    )
-                }
+                )
 
                 SearchButton(
                     focusRequester = searchButtonFocusRequester,
