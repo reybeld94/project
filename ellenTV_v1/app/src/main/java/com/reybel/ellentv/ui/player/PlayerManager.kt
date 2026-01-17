@@ -100,11 +100,11 @@ class PlayerManager(context: Context) {
     private val _player = MutableStateFlow(createPlayer(BufferLevel.NORMAL))
     val playerFlow: StateFlow<ExoPlayer> = _player.asStateFlow()
 
-    // 🔧 FIX: Usar buffer LOW para dispositivos limitados como FireTV
-    // HIGH/MAXIMUM causan freezes de 1-2s por garbage collection en dispositivos con poca RAM
-    // LOW (3-15s) es suficiente y evita sobrecarga de memoria
-    // VLC probablemente usa buffers pequeños similares
-    private val DEFAULT_LIVE_BUFFER = BufferLevel.LOW
+    // 🔧 FIX: Usar buffer MEDIUM para FireTV con servidores en modo ráfaga
+    // LOW (2-10s) es demasiado pequeño para servidores que transmiten en ráfagas
+    // MEDIUM (3-20s) es perfecto: tolera pausas del servidor sin causar GC
+    // Con 3-5 Mbps usa solo ~8-12 MB RAM (vs 15-30 MB del HIGH anterior)
+    private val DEFAULT_LIVE_BUFFER = BufferLevel.MEDIUM
 
     val player: ExoPlayer
         get() = _player.value
@@ -173,22 +173,38 @@ class PlayerManager(context: Context) {
         // Buffer según nivel
         val loadControl = when (level) {
             BufferLevel.LOW -> DefaultLoadControl.Builder()
-                // 🔧 OPTIMIZADO para FireTV/dispositivos limitados
-                // Parámetros: minBuffer, maxBuffer, playbackBuffer, playbackRebuffer
-                // Valores conservadores para minimizar uso de memoria
+                // Para conexiones muy rápidas o streams de baja calidad
                 .setBufferDurationsMs(
-                    2000,   // minBufferMs: 2s (reducido de 3s)
-                    10000,  // maxBufferMs: 10s (reducido de 15s)
+                    2000,   // minBufferMs: 2s
+                    10000,  // maxBufferMs: 10s
                     1500,   // bufferForPlaybackMs: 1.5s
                     2000    // bufferForPlaybackAfterRebufferMs: 2s
                 )
-                // FALSE = prioriza tamaño sobre tiempo (menos RAM)
                 .setPrioritizeTimeOverSizeThresholds(false)
-                // Limitar allocators para reducir fragmentación de memoria
                 .setAllocator(
                     androidx.media3.exoplayer.upstream.DefaultAllocator(
                         true,   // trimOnReset
-                        16 * 1024  // individualAllocationSize: 16KB (pequeño)
+                        16 * 1024  // individualAllocationSize: 16KB
+                    )
+                )
+                .build()
+
+            BufferLevel.MEDIUM -> DefaultLoadControl.Builder()
+                // 🔧 OPTIMIZADO para FireTV con servidores en modo ráfaga
+                // Balance perfecto: suficiente buffer para ráfagas, sin causar GC
+                .setBufferDurationsMs(
+                    3000,   // minBufferMs: 3s - arranque rápido
+                    20000,  // maxBufferMs: 20s - tolera pausas del servidor sin GC
+                    2500,   // bufferForPlaybackMs: 2.5s
+                    3000    // bufferForPlaybackAfterRebufferMs: 3s
+                )
+                // FALSE = prioriza memoria sobre duración (evita GC)
+                .setPrioritizeTimeOverSizeThresholds(false)
+                // Allocator optimizado para reducir fragmentación
+                .setAllocator(
+                    androidx.media3.exoplayer.upstream.DefaultAllocator(
+                        true,   // trimOnReset = libera memoria agresivamente
+                        16 * 1024  // 16KB chunks (vs 64KB default)
                     )
                 )
                 .build()
@@ -843,17 +859,17 @@ class PlayerManager(context: Context) {
             val mediaItemBuilder = MediaItem.Builder().setUri(url)
 
             if (!isVodContent) {
-                // 🔧 FIX: Configuración minimalista para FireTV
-                // Reducir ajustes de velocidad al mínimo
-                // Target offset bajo para buffer pequeño (2-10s)
+                // 🔧 FIX: Configuración optimizada para FireTV con buffer MEDIUM
+                // Ajustes mínimos de velocidad para reproducción natural
+                // Target offset ajustado al buffer medio (3-20s)
                 mediaItemBuilder.setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.01f)      // Casi sin aceleración (reducido de 1.02)
-                        .setMinPlaybackSpeed(0.99f)      // Casi sin desaceleración (reducido de 0.98)
-                        .setTargetOffsetMs(5_000L)       // 5s target (ajustado a buffer bajo)
+                        .setMaxPlaybackSpeed(1.01f)      // Aceleración mínima
+                        .setMinPlaybackSpeed(0.99f)      // Desaceleración mínima
+                        .setTargetOffsetMs(8_000L)       // 8s target (medio del buffer 3-20s)
                         .build()
                 )
-                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream (FireTV optimized: minimal buffer & adjustments)")
+                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream (FireTV optimized: MEDIUM buffer for burst servers)")
             } else {
                 Log.d("ELLENTV_PLAYER", "Configured as VOD stream")
             }
@@ -1035,7 +1051,8 @@ class PlayerManager(context: Context) {
 }
 
 enum class BufferLevel(val label: String) {
-    LOW("Bajo (2-10s) - FireTV"),
+    LOW("Bajo (2-10s)"),
+    MEDIUM("Medio (3-20s) - FireTV"),  // 🔧 Nuevo: balance entre LOW y NORMAL
     NORMAL("Normal (5-30s)"),
     HIGH("Alto (20-50s)"),
     MAXIMUM("Máximo (25-60s)")
