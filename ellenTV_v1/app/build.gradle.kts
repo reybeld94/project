@@ -14,6 +14,15 @@ android {
         targetSdk = 30
         versionCode = 1
         versionName = "1.0"
+
+        val apiBaseUrl = (project.findProperty("API_BASE_URL") as? String)
+            ?.trim()
+            ?.takeUnless { it.isEmpty() }
+            ?: "http://10.0.0.188:8000/"
+        val escapedApiBaseUrl = apiBaseUrl
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "API_BASE_URL", "\"$escapedApiBaseUrl\"")
     }
 
     buildTypes {
