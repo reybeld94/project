@@ -92,7 +92,10 @@ class PlayerManager(context: Context) {
     private val _player = MutableStateFlow(createPlayer(BufferLevel.NORMAL))
     val playerFlow: StateFlow<ExoPlayer> = _player.asStateFlow()
 
-    private val DEFAULT_LIVE_BUFFER = BufferLevel.MAXIMUM  // Cambiado de HIGH a MAXIMUM para máxima estabilidad
+    // 🔧 FIX: Usar buffer HIGH fijo para live (no MAXIMUM)
+    // MAXIMUM es demasiado agresivo y causa delays innecesarios
+    // HIGH (20-50s) es suficiente y más similar a VLC
+    private val DEFAULT_LIVE_BUFFER = BufferLevel.HIGH
 
     val player: ExoPlayer
         get() = _player.value
@@ -205,6 +208,11 @@ class PlayerManager(context: Context) {
                     Player.STATE_BUFFERING -> {
                         Log.d("ELLENTV_PLAYER", "Buffering... (isVOD=$isVodContent)")
 
+                        // 🔧 FIX: Deshabilitar buffer adaptativo para live
+                        // El cambio dinámico de buffer recreaba el player y causaba freezes
+                        // VLC usa un buffer fijo y no lo cambia durante la reproducción
+                        // Ahora usamos buffer HIGH fijo desde el inicio
+                        /*
                         if (!isVodContent) {
                             val now = System.currentTimeMillis()
                             val timeSinceLastRebuffer = now - lastRebufferTime
@@ -246,6 +254,7 @@ class PlayerManager(context: Context) {
                                 }
                             }
                         }
+                        */
 
                         if (!isCrossfading) {
                             onBuffering?.invoke(true)
@@ -398,13 +407,14 @@ class PlayerManager(context: Context) {
             while (true) {
                 delay(5000)  // Aumentado de 3s a 5s para ser menos agresivo
 
-                if (!isVodContent) {
+                // 🔧 FIX: Deshabilitar health monitoring para live streams
+                // Este monitoreo constante estaba causando interrupciones y freezes
+                // VLC no hace este tipo de verificaciones agresivas
+                if (isVodContent) {
+                    // Solo para VOD mantenemos verificación básica
                     checkBufferNotProgressing()
-
-                    if (player.playbackState == Player.STATE_READY && player.isPlaying) {
-                        checkStreamHealth()
-                    }
                 }
+                // DESHABILITADO para LIVE: checkStreamHealth() - causaba freezes
             }
         }
     }
@@ -436,9 +446,10 @@ class PlayerManager(context: Context) {
         val stuckFor = now - lastBufferedProgressAt
         val coolDown = now - lastNoProgressReconnectAt
 
-        // Para VOD: timeout más largo (el servidor puede tardar)
-        val STUCK_MS = if (isVodContent) 40_000L else 35_000L  // Aumentado: VOD 30s→40s, Live 20s→35s
-        val COOLDOWN_MS = 40_000L  // Aumentado de 20s a 40s
+        // 🔧 FIX: Aumentar timeouts significativamente para evitar reconexiones innecesarias
+        // VLC espera mucho más antes de decidir que algo está mal
+        val STUCK_MS = if (isVodContent) 60_000L else 60_000L  // 60 segundos para ambos
+        val COOLDOWN_MS = 60_000L  // 60 segundos de cooldown
 
         if (stuckFor >= STUCK_MS && coolDown >= COOLDOWN_MS) {
             lastNoProgressReconnectAt = now
@@ -449,12 +460,14 @@ class PlayerManager(context: Context) {
             onHealthIssue?.invoke("Buffer no progresa")
 
             if (!isVodContent) {
-                val recovered = trySoftLiveRecovery()
-
-                if (!recovered) {
-                    attemptReconnect()
-                    liveStallRecoveryAttempts = 0
-                }
+                // 🔧 FIX: Deshabilitar soft live recovery - causaba micro-pausas
+                // VLC no hace estos seeks hacia atrás que interrumpen la reproducción
+                // Simplemente reconectamos si es absolutamente necesario
+                // val recovered = trySoftLiveRecovery()
+                // if (!recovered) {
+                attemptReconnect()
+                liveStallRecoveryAttempts = 0
+                // }
             }
 
             lastBufferedProgressAt = now
@@ -492,8 +505,14 @@ class PlayerManager(context: Context) {
         return true
     }
 
+    // 🔧 FIX: Función DESHABILITADA - causaba freezes en live streams
+    // Esta verificación constante de posición y bitrate interrumpía la reproducción
+    // VLC confía en que el player maneje el buffering automáticamente
     private fun checkStreamHealth() {
-        val currentPosition = player.currentPosition
+        // DESHABILITADO COMPLETAMENTE para evitar interrupciones
+        // El health monitoring agresivo causaba más problemas que soluciones
+
+        // Solo registramos el bitrate actual si cambia (sin acciones)
         val currentBitrate = player.currentTracks.groups
             .firstOrNull()?.mediaTrackGroup?.getFormat(0)?.bitrate?.toLong() ?: 0L
 
@@ -503,6 +522,9 @@ class PlayerManager(context: Context) {
             Log.d("ELLENTV_HEALTH", "Bitrate: ${currentBitrate / 1000} kbps")
         }
 
+        /*
+        // DESHABILITADO: Position stuck check
+        val currentPosition = player.currentPosition
         if (currentPosition == lastPosition && currentPosition > 0) {
             positionStuckCount++
             Log.w("ELLENTV_HEALTH", "Position stuck: $positionStuckCount/10")
@@ -521,6 +543,7 @@ class PlayerManager(context: Context) {
             positionStuckCount = 0
         }
 
+        // DESHABILITADO: Zero bitrate check
         if (currentBitrate == 0L && player.isPlaying) {
             zeroBitrateCount++
             Log.w("ELLENTV_HEALTH", "Zero bitrate: $zeroBitrateCount/12")
@@ -540,6 +563,7 @@ class PlayerManager(context: Context) {
         }
 
         lastPosition = currentPosition
+        */
     }
 
     private fun isRecoverableError(error: PlaybackException): Boolean {
@@ -696,14 +720,18 @@ class PlayerManager(context: Context) {
             val mediaItemBuilder = MediaItem.Builder().setUri(url)
 
             if (!isVodContent) {
+                // 🔧 FIX: Reducir ajustes automáticos de velocidad
+                // Los cambios constantes de velocidad (0.95x-1.05x) causaban micro-stutters
+                // Reducir el rango y aumentar el target offset para menos ajustes
+                // VLC probablemente no hace estos ajustes dinámicos de velocidad
                 mediaItemBuilder.setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.05f)
-                        .setMinPlaybackSpeed(0.95f)
-                        .setTargetOffsetMs(20_000L)  // Aumentado de 10s a 20s para evitar freezes
+                        .setMaxPlaybackSpeed(1.02f)      // Reducido de 1.05 a 1.02
+                        .setMinPlaybackSpeed(0.98f)      // Reducido de 0.95 a 0.98
+                        .setTargetOffsetMs(10_000L)      // Reducido de 20s a 10s (más cerca del live)
                         .build()
                 )
-                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream")
+                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream (minimal speed adjustments)")
             } else {
                 Log.d("ELLENTV_PLAYER", "Configured as VOD stream")
             }
