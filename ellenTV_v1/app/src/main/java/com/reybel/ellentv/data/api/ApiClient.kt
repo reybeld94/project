@@ -12,7 +12,12 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
 
 object ApiClient {
 
-    const val BASE_URL = "http://10.0.0.188:8000/"
+    private const val DEFAULT_BASE_URL = "http://10.0.0.188:8000/"
+    val BASE_URL: String = BuildConfig.API_BASE_URL
+        .ifBlank { DEFAULT_BASE_URL }
+        .let { base ->
+            if (base.endsWith("/")) base else "$base/"
+        }
 
     private val httpLoggingLevel = if (BuildConfig.DEBUG) {
         HttpLoggingInterceptor.Level.BODY
