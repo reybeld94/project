@@ -736,12 +736,10 @@ fun TvHomeScreen(
             }
     ) {
 
-        Image(
-            painter = painterResource(id = R.drawable.background),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.45f
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
         )
 
         when (section) {
