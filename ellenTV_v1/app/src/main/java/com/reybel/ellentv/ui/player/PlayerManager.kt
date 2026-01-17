@@ -497,10 +497,10 @@ class PlayerManager(context: Context) {
     // 🔍 DIAGNÓSTICO: Monitor de rendimiento para identificar causa exacta de freezes
     private fun startPerformanceMonitoring() {
         performanceMonitorJob = scope.launch {
-            delay(5000)  // Esperar 5s antes de empezar a monitorear
+            delay(30000)  // Esperar 30s antes de empezar (warm-up period)
 
             while (true) {
-                delay(2000)  // Check cada 2 segundos
+                delay(3000)  // Check cada 3 segundos (menos frecuente)
 
                 if (!isVodContent && player.isPlaying) {
                     val p = player
@@ -517,20 +517,20 @@ class PlayerManager(context: Context) {
                     // ALERTA: Buffer peligrosamente bajo
                     if (bufferedAheadMs < 3000) {  // Menos de 3 segundos
                         consecutiveLowBuffer++
-                        Log.e(
+                        Log.w(  // Cambiado de ERROR a WARNING
                             "ELLENTV_PERF",
-                            "⚠️ LOW BUFFER: ${bufferedAheadMs}ms ahead (${bufferedPercent}%) - count: $consecutiveLowBuffer - FREEZE RISK!"
+                            "⚠️ LOW BUFFER: ${bufferedAheadMs}ms ahead (${bufferedPercent}%) - count: $consecutiveLowBuffer"
                         )
 
-                        if (consecutiveLowBuffer >= 3) {  // 3 checks consecutivos = 6 segundos
+                        if (consecutiveLowBuffer >= 3) {  // 3 checks consecutivos = 9 segundos
                             Log.e(
                                 "ELLENTV_PERF",
-                                "🔴 BUFFER CRITICALLY LOW for 6s - FREEZE LIKELY OCCURRING"
+                                "🔴 BUFFER CRITICALLY LOW for 9s - ACTUAL FREEZE"
                             )
                         }
                     } else {
                         if (consecutiveLowBuffer > 0) {
-                            Log.i(
+                            Log.d(  // Cambiado de INFO a DEBUG (menos spam)
                                 "ELLENTV_PERF",
                                 "✅ Buffer recovered: ${bufferedAheadMs}ms ahead (${bufferedPercent}%)"
                             )
@@ -538,12 +538,12 @@ class PlayerManager(context: Context) {
                         consecutiveLowBuffer = 0
                     }
 
-                    // Log periódico de estado general (cada 10 segundos)
-                    if (now - lastBufferCheckTime > 10000) {
+                    // Log periódico de estado general (cada 30 segundos, menos frecuente)
+                    if (now - lastBufferCheckTime > 30000) {
                         val bitrate = getCurrentBitrate()
                         val bitrateStr = if (bitrate > 0) "${bitrate / 1000} kbps" else "N/A"
 
-                        Log.d(
+                        Log.i(  // Cambiado a INFO para status normales
                             "ELLENTV_PERF",
                             "📊 Status: Buffer=${bufferedAheadMs}ms (${bufferedPercent}%), " +
                             "Bitrate=$bitrateStr, " +
