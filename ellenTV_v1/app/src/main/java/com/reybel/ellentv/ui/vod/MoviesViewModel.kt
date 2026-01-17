@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.reybel.ellentv.data.api.TmdbItem
 import com.reybel.ellentv.data.api.TmdbPagedResponse
 import com.reybel.ellentv.data.api.VodItem
+import com.reybel.ellentv.data.api.VodListResponse
 import com.reybel.ellentv.data.repo.VodRepo
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -88,7 +89,7 @@ class MoviesViewModel(
             updateCollection(collectionId) { it.copy(isLoading = true, error = null, page = 0, totalPages = 0) }
             try {
                 val resp = repo.fetchCollectionItems(collectionId, page = 1)
-                val parsed = parseTmdbPayload(resp.payload)
+                val parsed = parseCollectionPayload(resp.payload)
                 updateCollection(collectionId) {
                     it.copy(
                         isLoading = false,
@@ -116,7 +117,7 @@ class MoviesViewModel(
             try {
                 val nextPage = collection.page + 1
                 val resp = repo.fetchCollectionItems(collectionId, page = nextPage)
-                val parsed = parseTmdbPayload(resp.payload)
+                val parsed = parseCollectionPayload(resp.payload)
                 updateCollection(collectionId) {
                     it.copy(
                         isLoading = false,
@@ -149,14 +150,27 @@ class MoviesViewModel(
         }
     }
 
-    private fun parseTmdbPayload(payload: Map<String, Any>): ParsedTmdbCollection {
-        val adapter = moshi.adapter(TmdbPagedResponse::class.java)
-        val parsed = adapter.fromJsonValue(payload)
-        val items = parsed?.results?.map { it.toVodItem() } ?: emptyList()
-        val totalResults = (payload["total_results"] as? Number)?.toInt() ?: items.size
-        val totalPages = parsed?.totalPages ?: (payload["total_pages"] as? Number)?.toInt() ?: 1
+    private fun parseCollectionPayload(payload: Map<String, Any>): ParsedTmdbCollection {
+        val tmdbAdapter = moshi.adapter(TmdbPagedResponse::class.java)
+        val tmdbParsed = tmdbAdapter.fromJsonValue(payload)
+        val tmdbItems = tmdbParsed?.results?.map { it.toVodItem() } ?: emptyList()
+        if (tmdbItems.isNotEmpty()) {
+            val totalResults = (payload["total_results"] as? Number)?.toInt() ?: tmdbItems.size
+            val totalPages = tmdbParsed?.totalPages ?: (payload["total_pages"] as? Number)?.toInt() ?: 1
+            return ParsedTmdbCollection(
+                items = tmdbItems,
+                totalResults = totalResults,
+                totalPages = totalPages
+            )
+        }
+
+        val listAdapter = moshi.adapter(VodListResponse::class.java)
+        val listParsed = listAdapter.fromJsonValue(payload)
+        val listItems = listParsed?.items ?: emptyList()
+        val totalResults = listParsed?.total ?: (payload["total"] as? Number)?.toInt() ?: listItems.size
+        val totalPages = (payload["total_pages"] as? Number)?.toInt() ?: 1
         return ParsedTmdbCollection(
-            items = items,
+            items = listItems,
             totalResults = totalResults,
             totalPages = totalPages
         )
