@@ -92,10 +92,11 @@ class PlayerManager(context: Context) {
     private val _player = MutableStateFlow(createPlayer(BufferLevel.NORMAL))
     val playerFlow: StateFlow<ExoPlayer> = _player.asStateFlow()
 
-    // 🔧 FIX: Usar buffer HIGH fijo para live (no MAXIMUM)
-    // MAXIMUM es demasiado agresivo y causa delays innecesarios
-    // HIGH (20-50s) es suficiente y más similar a VLC
-    private val DEFAULT_LIVE_BUFFER = BufferLevel.HIGH
+    // 🔧 FIX: Usar buffer LOW para dispositivos limitados como FireTV
+    // HIGH/MAXIMUM causan freezes de 1-2s por garbage collection en dispositivos con poca RAM
+    // LOW (3-15s) es suficiente y evita sobrecarga de memoria
+    // VLC probablemente usa buffers pequeños similares
+    private val DEFAULT_LIVE_BUFFER = BufferLevel.LOW
 
     val player: ExoPlayer
         get() = _player.value
@@ -163,23 +164,39 @@ class PlayerManager(context: Context) {
         // Buffer según nivel
         val loadControl = when (level) {
             BufferLevel.LOW -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(3000, 15000, 1500, 3000)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                // 🔧 OPTIMIZADO para FireTV/dispositivos limitados
+                // Parámetros: minBuffer, maxBuffer, playbackBuffer, playbackRebuffer
+                // Valores conservadores para minimizar uso de memoria
+                .setBufferDurationsMs(
+                    2000,   // minBufferMs: 2s (reducido de 3s)
+                    10000,  // maxBufferMs: 10s (reducido de 15s)
+                    1500,   // bufferForPlaybackMs: 1.5s
+                    2000    // bufferForPlaybackAfterRebufferMs: 2s
+                )
+                // FALSE = prioriza tamaño sobre tiempo (menos RAM)
+                .setPrioritizeTimeOverSizeThresholds(false)
+                // Limitar allocators para reducir fragmentación de memoria
+                .setAllocator(
+                    androidx.media3.exoplayer.upstream.DefaultAllocator(
+                        true,   // trimOnReset
+                        16 * 1024  // individualAllocationSize: 16KB (pequeño)
+                    )
+                )
                 .build()
 
             BufferLevel.NORMAL -> DefaultLoadControl.Builder()
                 .setBufferDurationsMs(5000, 30000, 2000, 5000)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
 
             BufferLevel.HIGH -> DefaultLoadControl.Builder()
                 .setBufferDurationsMs(25000, 60000, 3000, 15000)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
 
             BufferLevel.MAXIMUM -> DefaultLoadControl.Builder()
                 .setBufferDurationsMs(30000, 90000, 3000, 20000)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
         }
 
@@ -634,11 +651,11 @@ class PlayerManager(context: Context) {
 
         if (bufferLevel != DEFAULT_LIVE_BUFFER) {
             bufferLevel = DEFAULT_LIVE_BUFFER
-            onBufferLevelChanged?.invoke("Buffer inicial LIVE: ${bufferLevel.label}")
+            onBufferLevelChanged?.invoke("Buffer LIVE optimizado para FireTV: ${bufferLevel.label}")
             recreatePlayerWithLevel(DEFAULT_LIVE_BUFFER)
         } else {
             bufferLevel = DEFAULT_LIVE_BUFFER
-            onBufferLevelChanged?.invoke("Buffer inicial LIVE: ${bufferLevel.label}")
+            onBufferLevelChanged?.invoke("Buffer LIVE optimizado para FireTV: ${bufferLevel.label}")
         }
 
         lastBufferedPos = 0L
@@ -720,18 +737,17 @@ class PlayerManager(context: Context) {
             val mediaItemBuilder = MediaItem.Builder().setUri(url)
 
             if (!isVodContent) {
-                // 🔧 FIX: Reducir ajustes automáticos de velocidad
-                // Los cambios constantes de velocidad (0.95x-1.05x) causaban micro-stutters
-                // Reducir el rango y aumentar el target offset para menos ajustes
-                // VLC probablemente no hace estos ajustes dinámicos de velocidad
+                // 🔧 FIX: Configuración minimalista para FireTV
+                // Reducir ajustes de velocidad al mínimo
+                // Target offset bajo para buffer pequeño (2-10s)
                 mediaItemBuilder.setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.02f)      // Reducido de 1.05 a 1.02
-                        .setMinPlaybackSpeed(0.98f)      // Reducido de 0.95 a 0.98
-                        .setTargetOffsetMs(10_000L)      // Reducido de 20s a 10s (más cerca del live)
+                        .setMaxPlaybackSpeed(1.01f)      // Casi sin aceleración (reducido de 1.02)
+                        .setMinPlaybackSpeed(0.99f)      // Casi sin desaceleración (reducido de 0.98)
+                        .setTargetOffsetMs(5_000L)       // 5s target (ajustado a buffer bajo)
                         .build()
                 )
-                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream (minimal speed adjustments)")
+                Log.d("ELLENTV_PLAYER", "Configured as LIVE stream (FireTV optimized: minimal buffer & adjustments)")
             } else {
                 Log.d("ELLENTV_PLAYER", "Configured as VOD stream")
             }
@@ -912,7 +928,7 @@ class PlayerManager(context: Context) {
 }
 
 enum class BufferLevel(val label: String) {
-    LOW("Bajo (3-15s)"),
+    LOW("Bajo (2-10s) - FireTV"),
     NORMAL("Normal (5-30s)"),
     HIGH("Alto (20-50s)"),
     MAXIMUM("Máximo (25-60s)")
