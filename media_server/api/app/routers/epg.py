@@ -66,8 +66,23 @@ def _build_library_desc_map(db: Session) -> dict[str, str]:
     return out
 
 
-def sync_epg_for_source_id(db: Session, source_id: str, hours: int = 36, purge_all_programs: bool = True):
-    """Core sync que puede llamarse desde el endpoint o desde un job automático."""
+def sync_epg_for_source_id(
+    db: Session,
+    source_id: str,
+    hours: int = 36,
+    purge_all_programs: bool = True,
+    auto_map_provider_id: str | None = None,
+    auto_map_approved_only: bool = True,
+    auto_map_min_score: float = 0.72,
+):
+    """
+    Core sync que puede llamarse desde el endpoint o desde un job automático.
+
+    Args:
+        auto_map_provider_id: Si se especifica, ejecuta automapeo para este provider después de sincronizar
+        auto_map_approved_only: Si es True, solo automapea canales aprobados
+        auto_map_min_score: Score mínimo para el automapeo (default 0.72)
+    """
     src = db.get(EpgSource, source_id)
     if not src:
         raise HTTPException(status_code=404, detail="EPG source not found")
@@ -212,7 +227,7 @@ def sync_epg_for_source_id(db: Session, source_id: str, hours: int = 36, purge_a
             src.updated_at = datetime.utcnow()
             db.commit()
 
-        return {
+        result = {
             "ok": True,
             "source_id": source_id,
             "xmltv_url": url,
@@ -220,7 +235,70 @@ def sync_epg_for_source_id(db: Session, source_id: str, hours: int = 36, purge_a
             "purged_programs": purged_programs,
             "channels": {"new": new_channels, "updated": up_channels},
             "programs": {"new": new_programs},
+            "auto_map": None,
         }
+
+        # Si se especifica provider_id, ejecutar automapeo después de sincronizar
+        if auto_map_provider_id:
+            try:
+                p = db.get(Provider, auto_map_provider_id)
+                if p:
+                    log.info(f"Ejecutando automapeo para provider {auto_map_provider_id} (approved_only={auto_map_approved_only})")
+
+                    epg_channels = db.execute(
+                        select(EpgChannel.xmltv_id, EpgChannel.display_name)
+                        .where(EpgChannel.epg_source_id == src.id)
+                    ).all()
+                    candidates = [(a, b) for (a, b) in epg_channels]
+
+                    stmt = select(LiveStream).where(LiveStream.provider_id == p.id)
+                    if auto_map_approved_only:
+                        stmt = stmt.where(LiveStream.approved == True)
+
+                    streams = db.execute(stmt.order_by(LiveStream.name.asc()).limit(5000)).scalars().all()
+
+                    matched = 0
+                    changed = 0
+
+                    for s in streams:
+                        if s.epg_source_id and s.epg_source_id != src.id:
+                            continue
+
+                        if s.epg_channel_id and s.epg_source_id == src.id:
+                            continue
+
+                        name_for_match = (s.normalized_name or s.name or "").strip()
+                        if not name_for_match:
+                            continue
+
+                        m = best_match(name_for_match, candidates, min_score=auto_map_min_score)
+                        if not m:
+                            continue
+
+                        xml_id, disp, sc = m
+                        matched += 1
+
+                        s.epg_source_id = src.id
+                        s.epg_channel_id = xml_id
+                        changed += 1
+
+                    db.commit()
+
+                    result["auto_map"] = {
+                        "executed": True,
+                        "provider_id": auto_map_provider_id,
+                        "approved_only": auto_map_approved_only,
+                        "min_score": auto_map_min_score,
+                        "matched": matched,
+                        "updated": changed,
+                        "total_streams_processed": len(streams),
+                    }
+                    log.info(f"Automapeo completado: {matched} matches, {changed} actualizados")
+            except Exception as e:
+                log.error(f"Error en automapeo: {e}")
+                result["auto_map"] = {"executed": False, "error": str(e)}
+
+        return result
     finally:
         try:
             import os
@@ -303,14 +381,27 @@ def sync_epg(
     source_id: str,
     hours: int = 36,
     purge_all_programs: bool = True,
+    auto_map_provider_id: str | None = None,
+    auto_map_approved_only: bool = True,
+    auto_map_min_score: float = 0.72,
     db: Session = Depends(get_db),
 ):
-    """Endpoint de sync manual. Por defecto purga TODO lo viejo para nunca mezclar."""
+    """
+    Endpoint de sync manual. Por defecto purga TODO lo viejo para nunca mezclar.
+
+    Args:
+        auto_map_provider_id: Si se especifica, ejecuta automapeo para este provider después de sincronizar
+        auto_map_approved_only: Si es True, solo automapea canales aprobados (default: True)
+        auto_map_min_score: Score mínimo para el automapeo (default: 0.72)
+    """
     return sync_epg_for_source_id(
         db,
         source_id=source_id,
         hours=hours,
         purge_all_programs=purge_all_programs,
+        auto_map_provider_id=auto_map_provider_id,
+        auto_map_approved_only=auto_map_approved_only,
+        auto_map_min_score=auto_map_min_score,
     )
 
 
@@ -413,6 +504,7 @@ def epg_auto_map(
     source_id: str,
     min_score: float = 0.72,
     dry_run: bool = True,
+    approved_only: bool = False,
     limit: int = 5000,
     db: Session = Depends(get_db),
 ):
@@ -421,6 +513,9 @@ def epg_auto_map(
     Guarda:
       - live_stream.epg_source_id = source_id
       - live_stream.epg_channel_id = epg_channel.xmltv_id
+
+    Args:
+        approved_only: Si es True, solo automapea canales aprobados (approved=True)
     """
     p = db.get(Provider, provider_id)
     if not p:
@@ -436,10 +531,13 @@ def epg_auto_map(
     ).all()
     candidates = [(a, b) for (a, b) in epg_channels]
 
+    stmt = select(LiveStream).where(LiveStream.provider_id == p.id)
+
+    if approved_only:
+        stmt = stmt.where(LiveStream.approved == True)
+
     streams = db.execute(
-        select(LiveStream)
-        .where(LiveStream.provider_id == p.id)
-        .order_by(LiveStream.name.asc())
+        stmt.order_by(LiveStream.name.asc())
         .limit(min(limit, 20000))
     ).scalars().all()
 
@@ -491,12 +589,41 @@ def epg_auto_map(
         "source_id": source_id,
         "source_name": src.name,
         "dry_run": dry_run,
+        "approved_only": approved_only,
         "min_score": min_score,
         "matched_candidates": matched,
         "updated": changed,
         "skipped_other_source": skipped_other_source,
+        "total_streams_processed": len(streams),
         "sample": sample,
     }
+
+
+@router.post("/auto_map_approved")
+def epg_auto_map_approved(
+    provider_id: str,
+    source_id: str,
+    min_score: float = 0.72,
+    dry_run: bool = True,
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint conveniente para automapear SOLO canales aprobados.
+    Es equivalente a llamar /auto_map con approved_only=True.
+
+    Útil para cuando sincronizas el XML y quieres automapear solo
+    los canales que ya has aprobado, permitiendo que el usuario
+    todavía pueda verificar y modificar el mapeo manualmente.
+    """
+    return epg_auto_map(
+        provider_id=provider_id,
+        source_id=source_id,
+        min_score=min_score,
+        dry_run=dry_run,
+        approved_only=True,  # Siempre True para este endpoint
+        limit=5000,
+        db=db,
+    )
 
 
 @router.get("/grid")
