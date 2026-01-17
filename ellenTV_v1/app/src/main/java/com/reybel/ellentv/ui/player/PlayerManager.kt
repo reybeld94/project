@@ -35,6 +35,7 @@ class PlayerManager(context: Context) {
     private var retryJob: Job? = null
     private var healthMonitorJob: Job? = null
     private var progressSaveJob: Job? = null
+    private var performanceMonitorJob: Job? = null  // 🔍 DIAGNÓSTICO: Monitor de rendimiento
 
     // Progress tracking
     private val progressCache = PlaybackProgressCache(context)
@@ -60,6 +61,13 @@ class PlayerManager(context: Context) {
     private var positionStuckCount = 0
     private var lastBitrate = 0L
     private var zeroBitrateCount = 0
+
+    // 🔍 DIAGNÓSTICO: Tracking detallado de frames para identificar freezes
+    private var lastRenderedFrames = 0L
+    private var lastDroppedFrames = 0L
+    private var lastBufferCheckTime = 0L
+    private var consecutiveLowBuffer = 0
+    private var lastEventTimestamp = 0L
 
     // "Buffer no progresa" watchdog
     private var lastBufferedPos = 0L
@@ -104,6 +112,7 @@ class PlayerManager(context: Context) {
     init {
         setupPlayerListeners(player)
         startHealthMonitoring()
+        startPerformanceMonitoring()  // 🔍 DIAGNÓSTICO: Iniciar monitoreo de rendimiento
     }
 
     /**
@@ -216,6 +225,39 @@ class PlayerManager(context: Context) {
     }
 
     private fun setupPlayerListeners(p: ExoPlayer) {
+        // 🔍 DIAGNÓSTICO: Listener de analytics para tracking de frames y rendimiento
+        p.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onDroppedVideoFrames(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                droppedFrames: Int,
+                elapsedMs: Long
+            ) {
+                if (droppedFrames > 0) {
+                    val droppedRate = (droppedFrames.toFloat() / elapsedMs * 1000).toInt()
+                    Log.w(
+                        "ELLENTV_FRAMES",
+                        "🎬 DROPPED FRAMES: $droppedFrames frames in ${elapsedMs}ms (~$droppedRate fps dropped) - POSIBLE FREEZE"
+                    )
+                }
+            }
+
+            override fun onVideoFrameProcessingOffset(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                totalProcessingOffsetUs: Long,
+                frameCount: Int
+            ) {
+                if (frameCount > 0) {
+                    val avgOffsetMs = totalProcessingOffsetUs / 1000 / frameCount
+                    if (avgOffsetMs > 50) {  // Más de 50ms de lag es preocupante
+                        Log.w(
+                            "ELLENTV_FRAMES",
+                            "⏱️ FRAME PROCESSING SLOW: avg ${avgOffsetMs}ms per frame ($frameCount frames) - DECODER STRUGGLING"
+                        )
+                    }
+                }
+            }
+        })
+
         p.addListener(object : Player.Listener {
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -432,6 +474,79 @@ class PlayerManager(context: Context) {
                     checkBufferNotProgressing()
                 }
                 // DESHABILITADO para LIVE: checkStreamHealth() - causaba freezes
+            }
+        }
+    }
+
+    // 🔍 DIAGNÓSTICO: Monitor de rendimiento para identificar causa exacta de freezes
+    private fun startPerformanceMonitoring() {
+        performanceMonitorJob = scope.launch {
+            delay(5000)  // Esperar 5s antes de empezar a monitorear
+
+            while (true) {
+                delay(2000)  // Check cada 2 segundos
+
+                if (!isVodContent && player.isPlaying) {
+                    val p = player
+                    val now = System.currentTimeMillis()
+
+                    // Analizar estado del buffer
+                    val bufferedPercent = p.bufferedPercentage
+                    val bufferedPos = p.bufferedPosition
+                    val currentPos = p.currentPosition
+                    val bufferedAheadMs = bufferedPos - currentPos
+
+                    // Analizar frames (si están disponibles)
+                    val videoFormat = p.videoFormat
+                    val droppedFrames = try {
+                        p.analyticsCollector.videoFormat?.let {
+                            // Intentar obtener estadísticas de frames
+                            0L  // Placeholder
+                        } ?: 0L
+                    } catch (e: Exception) {
+                        0L
+                    }
+
+                    // ALERTA: Buffer peligrosamente bajo
+                    if (bufferedAheadMs < 3000) {  // Menos de 3 segundos
+                        consecutiveLowBuffer++
+                        Log.e(
+                            "ELLENTV_PERF",
+                            "⚠️ LOW BUFFER: ${bufferedAheadMs}ms ahead (${bufferedPercent}%) - count: $consecutiveLowBuffer - FREEZE RISK!"
+                        )
+
+                        if (consecutiveLowBuffer >= 3) {  // 3 checks consecutivos = 6 segundos
+                            Log.e(
+                                "ELLENTV_PERF",
+                                "🔴 BUFFER CRITICALLY LOW for 6s - FREEZE LIKELY OCCURRING"
+                            )
+                        }
+                    } else {
+                        if (consecutiveLowBuffer > 0) {
+                            Log.i(
+                                "ELLENTV_PERF",
+                                "✅ Buffer recovered: ${bufferedAheadMs}ms ahead (${bufferedPercent}%)"
+                            )
+                        }
+                        consecutiveLowBuffer = 0
+                    }
+
+                    // Log periódico de estado general (cada 10 segundos)
+                    if (now - lastBufferCheckTime > 10000) {
+                        val bitrate = getCurrentBitrate()
+                        val bitrateStr = if (bitrate > 0) "${bitrate / 1000} kbps" else "N/A"
+
+                        Log.d(
+                            "ELLENTV_PERF",
+                            "📊 Status: Buffer=${bufferedAheadMs}ms (${bufferedPercent}%), " +
+                            "Bitrate=$bitrateStr, " +
+                            "Format=${videoFormat?.width}x${videoFormat?.height}@${videoFormat?.frameRate}fps, " +
+                            "Codec=${videoFormat?.sampleMimeType}"
+                        )
+
+                        lastBufferCheckTime = now
+                    }
+                }
             }
         }
     }
@@ -814,6 +929,7 @@ class PlayerManager(context: Context) {
         retryJob?.cancel()
         healthMonitorJob?.cancel()
         progressSaveJob?.cancel()
+        performanceMonitorJob?.cancel()  // 🔍 DIAGNÓSTICO: Cancelar monitor de rendimiento
         player.release()
         onBuffering = null
         onError = null
