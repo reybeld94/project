@@ -57,6 +57,7 @@ data class CollectionOut(
     val slug: String,
     @Json(name = "source_type") val sourceType: String,
     @Json(name = "source_id") val sourceId: Int? = null,
+    @Json(name = "filters") val filters: Map<String, Any>? = null,
     val enabled: Boolean = true,
     @Json(name = "order_index") val orderIndex: Int = 0
 )

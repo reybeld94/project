@@ -11,7 +11,6 @@ import com.reybel.ellentv.data.repo.VodRepo
 import com.reybel.ellentv.ui.vod.SearchState
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import kotlin.math.ceil
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +35,6 @@ data class OnDemandCollectionUi(
     val collectionId: String,
     val title: String,
     val contentType: ContentFilter,
-    val categoryExtId: Int? = null,
     val isLoading: Boolean = false,
     val items: List<VodItem> = emptyList(),
     val total: Int = 0,
@@ -82,23 +80,12 @@ class OnDemandViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(providerId = providerId, isLoading = true, error = null) }
             try {
-                val movieCollections = repo.fetchCollections(enabled = true)
+                val serverCollections = repo.fetchCollections(enabled = true)
                     .map { collection ->
                         OnDemandCollectionUi(
                             collectionId = collection.id,
                             title = collection.name,
-                            contentType = ContentFilter.MOVIES,
-                            isLoading = true
-                        )
-                    }
-
-                val seriesCollections = repo.fetchSeriesCategories(providerId)
-                    .map { category ->
-                        OnDemandCollectionUi(
-                            collectionId = "series:${category.extId}",
-                            title = category.name,
-                            contentType = ContentFilter.SERIES,
-                            categoryExtId = category.extId,
+                            contentType = resolveCollectionContentType(collection.filters),
                             isLoading = true
                         )
                     }
@@ -134,7 +121,7 @@ class OnDemandViewModel(
                     emptyList()
                 }
 
-                val allCollections = continueWatchingCollection + movieCollections + seriesCollections
+                val allCollections = continueWatchingCollection + serverCollections
 
                 _ui.update { it.copy(isLoading = false, collections = allCollections) }
 
@@ -254,8 +241,7 @@ class OnDemandViewModel(
         val collection = _ui.value.collections.firstOrNull { it.collectionId == collectionId } ?: return
         if (collection.isLoading) return
         if (collection.items.isEmpty()) return
-        if (collection.page >= collection.totalPages && collection.contentType == ContentFilter.MOVIES) return
-        if (collection.items.size >= collection.total && collection.contentType == ContentFilter.SERIES) return
+        if (collection.page >= collection.totalPages && collection.contentType != ContentFilter.ALL) return
         if (lastVisibleIndex < collection.items.size - 6) return
 
         viewModelScope.launch {
@@ -277,18 +263,16 @@ class OnDemandViewModel(
                         }
                     }
                     ContentFilter.SERIES -> {
-                        val providerId = _ui.value.providerId ?: return@launch
-                        val nextOffset = collection.offset + collection.limit
-                        val resp = repo.fetchSeriesPage(providerId, collection.categoryExtId, collection.limit, nextOffset)
-                        val totalPages = ceil(resp.total / collection.limit.toDouble()).toInt().coerceAtLeast(1)
+                        val nextPage = collection.page + 1
+                        val resp = repo.fetchCollectionItems(collection.collectionId, page = nextPage)
+                        val parsed = parseTmdbPayload(resp.payload)
                         updateCollection(collectionId) {
                             it.copy(
                                 isLoading = false,
-                                items = it.items + resp.items.map { item -> item.copy(contentType = CONTENT_TYPE_SERIES) },
-                                total = resp.total,
-                                offset = nextOffset,
-                                page = (nextOffset / collection.limit) + 1,
-                                totalPages = totalPages
+                                items = it.items + parsed.items.map { item -> item.copy(contentType = CONTENT_TYPE_SERIES) },
+                                total = parsed.totalResults,
+                                page = nextPage,
+                                totalPages = parsed.totalPages
                             )
                         }
                     }
@@ -328,17 +312,15 @@ class OnDemandViewModel(
                         }
                     }
                     ContentFilter.SERIES -> {
-                        val providerId = _ui.value.providerId ?: return@launch
-                        val resp = repo.fetchSeriesPage(providerId, collection.categoryExtId, collection.limit, 0)
-                        val totalPages = ceil(resp.total / collection.limit.toDouble()).toInt().coerceAtLeast(1)
+                        val resp = repo.fetchCollectionItems(collection.collectionId, page = 1)
+                        val parsed = parseTmdbPayload(resp.payload)
                         updateCollection(collectionId) {
                             it.copy(
                                 isLoading = false,
-                                items = resp.items.map { item -> item.copy(contentType = CONTENT_TYPE_SERIES) },
-                                total = resp.total,
-                                offset = resp.items.size,
+                                items = parsed.items.map { item -> item.copy(contentType = CONTENT_TYPE_SERIES) },
+                                total = parsed.totalResults,
                                 page = 1,
-                                totalPages = totalPages
+                                totalPages = parsed.totalPages
                             )
                         }
                     }
@@ -408,6 +390,11 @@ class OnDemandViewModel(
             streamUrl = streamUrl,
             contentType = CONTENT_TYPE_MOVIE
         )
+    }
+
+    private fun resolveCollectionContentType(filters: Map<String, Any>?): ContentFilter {
+        val kind = (filters?.get("kind") as? String)?.lowercase()
+        return if (kind == "tv" || kind == "series") ContentFilter.SERIES else ContentFilter.MOVIES
     }
 }
 
