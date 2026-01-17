@@ -151,7 +151,7 @@ class VodRepo {
     suspend fun fetchSeriesEpisodePlayUrl(
         providerId: String,
         episodeId: Int,
-        format: String
+        format: String?
     ): String {
         return api.getSeriesEpisodePlay(
             providerId = providerId,

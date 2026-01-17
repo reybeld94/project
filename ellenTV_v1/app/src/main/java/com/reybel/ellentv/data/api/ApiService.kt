@@ -116,7 +116,7 @@ interface ApiService {
     suspend fun getSeriesEpisodePlay(
         @Query("provider_id") providerId: String,
         @Query("episode_id") episodeId: Int,
-        @Query("format") format: String
+        @Query("format") format: String?
     ): PlayResponse
 
     // ---------- COLLECTIONS ----------
