@@ -859,7 +859,7 @@ fun TvHomeScreen(
 
                                 val url = onDemandVm.getSeriesEpisodePlayUrl(providerId, episodeId, format)
                                 vodActiveFullscreen = true
-                                playerManager.setStreamUrls(listOf(url))
+                                playerManager.setVodUrl(url)
 
                                 // Set metadata for progress tracking
                                 playerManager.setContentMetadata(
