@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -53,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -170,7 +172,6 @@ fun OnDemandScreen(
 
     var focusedCollectionIndex by remember { mutableIntStateOf(0) }
     var focusedItem by remember { mutableStateOf<VodItem?>(null) }
-    val collectionFocusRequester = remember { FocusRequester() }
     val focusedIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     val scrollIndexByCollection = remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
@@ -186,20 +187,18 @@ fun OnDemandScreen(
         }
     }
 
-    val focusedCollection = filteredCollections.getOrNull(focusedCollectionIndex)
-    val nextCollection = filteredCollections.getOrNull(focusedCollectionIndex + 1)
-
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .background(Color.Black.copy(alpha = 0.5f))
         ) {
+            // Header with filters and search
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -211,7 +210,8 @@ fun OnDemandScreen(
                         text = "On Demand",
                         color = Color.White,
                         style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
                         )
                     )
                     FilterChip(
@@ -219,7 +219,8 @@ fun OnDemandScreen(
                         onClick = { onFilterChange(ContentFilter.ALL) },
                         label = { Text("All") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
+                            selectedContainerColor = AccentColor.copy(alpha = 0.3f),
+                            selectedLabelColor = Color.White
                         )
                     )
                     FilterChip(
@@ -227,7 +228,8 @@ fun OnDemandScreen(
                         onClick = { onFilterChange(ContentFilter.MOVIES) },
                         label = { Text("Movies") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
+                            selectedContainerColor = AccentColor.copy(alpha = 0.3f),
+                            selectedLabelColor = Color.White
                         )
                     )
                     FilterChip(
@@ -235,7 +237,8 @@ fun OnDemandScreen(
                         onClick = { onFilterChange(ContentFilter.SERIES) },
                         label = { Text("Series") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor.copy(alpha = 0.3f)
+                            selectedContainerColor = AccentColor.copy(alpha = 0.3f),
+                            selectedLabelColor = Color.White
                         )
                     )
                 }
@@ -246,61 +249,76 @@ fun OnDemandScreen(
                 )
             }
 
-            focusedCollection?.let { collection ->
-                val collectionFocusIndex = focusedIndexByCollection.value[collection.collectionId] ?: 0
-                val collectionScrollIndex = scrollIndexByCollection.value[collection.collectionId] ?: collectionFocusIndex
-                CollectionRow(
-                    title = collection.title.ifBlank { "Collection #${focusedCollectionIndex + 1}" },
-                    collection = collection,
-                    onRequestMore = onRequestMore,
-                    onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
-                    onItemFocused = { item -> focusedItem = item },
-                    onOpenDetails = { selectedItem = it },
-                    onNavigateUp = {
-                        if (focusedCollectionIndex > 0) {
-                            focusedCollectionIndex--
-                        } else {
-                            searchButtonFocusRequester.requestFocus()
-                        }
-                    },
-                    onNavigateDown = {
-                        if (focusedCollectionIndex < filteredCollections.lastIndex) {
-                            focusedCollectionIndex++
-                        }
-                    },
-                    focusRequester = collectionFocusRequester,
-                    focusRequesterIndex = collectionFocusIndex,
-                    initialFocusedIndex = collectionFocusIndex,
-                    initialScrollIndex = collectionScrollIndex,
-                    onFocusedIndexChange = { newIndex ->
-                        focusedIndexByCollection.value = focusedIndexByCollection.value
-                            .toMutableMap()
-                            .apply { put(collection.collectionId, newIndex) }
-                    },
-                    onScrollIndexChange = { newIndex ->
-                        scrollIndexByCollection.value = scrollIndexByCollection.value
-                            .toMutableMap()
-                            .apply { put(collection.collectionId, newIndex) }
-                    },
-                    progressMap = if (collection.collectionId == "continue_watching") progressMap else emptyMap()
-                )
+            // Collections with vertical scroll
+            val collectionsListState = rememberLazyListState()
+
+            LaunchedEffect(focusedCollectionIndex) {
+                if (focusedCollectionIndex in filteredCollections.indices) {
+                    collectionsListState.animateScrollToItem(focusedCollectionIndex)
+                }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            OnDemandMetadataPanel(item = focusedItem)
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            AnimatedVisibility(
-                visible = nextCollection != null,
-                enter = fadeIn(),
-                exit = fadeOut()
+            LazyColumn(
+                state = collectionsListState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(32.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 24.dp)
             ) {
-                nextCollection?.let { collection ->
-                    CollectionRowPreview(
-                        title = collection.title.ifBlank { "Next collection" },
-                        items = collection.items
+                itemsIndexed(filteredCollections, key = { _, col -> col.collectionId }) { colIndex, collection ->
+                    val collectionFocusRequester = remember { FocusRequester() }
+                    val collectionFocusIndex = focusedIndexByCollection.value[collection.collectionId] ?: 0
+                    val collectionScrollIndex = scrollIndexByCollection.value[collection.collectionId] ?: collectionFocusIndex
+                    val isFocusedCollection = colIndex == focusedCollectionIndex
+
+                    LaunchedEffect(isFocusedCollection) {
+                        if (isFocusedCollection && collection.items.isNotEmpty()) {
+                            collectionFocusRequester.requestFocus()
+                        }
+                    }
+
+                    CollectionRowModern(
+                        title = collection.title.ifBlank { "Collection #${colIndex + 1}" },
+                        collection = collection,
+                        isFocused = isFocusedCollection,
+                        onRequestMore = onRequestMore,
+                        onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
+                        onItemFocused = { item ->
+                            focusedItem = item
+                            if (colIndex != focusedCollectionIndex) {
+                                focusedCollectionIndex = colIndex
+                            }
+                        },
+                        onOpenDetails = { selectedItem = it },
+                        onNavigateUp = {
+                            if (colIndex > 0) {
+                                focusedCollectionIndex = colIndex - 1
+                            } else {
+                                searchButtonFocusRequester.requestFocus()
+                            }
+                        },
+                        onNavigateDown = {
+                            if (colIndex < filteredCollections.lastIndex) {
+                                focusedCollectionIndex = colIndex + 1
+                            }
+                        },
+                        focusRequester = collectionFocusRequester,
+                        focusRequesterIndex = collectionFocusIndex,
+                        initialFocusedIndex = collectionFocusIndex,
+                        initialScrollIndex = collectionScrollIndex,
+                        onFocusedIndexChange = { newIndex ->
+                            focusedIndexByCollection.value = focusedIndexByCollection.value
+                                .toMutableMap()
+                                .apply { put(collection.collectionId, newIndex) }
+                        },
+                        onScrollIndexChange = { newIndex ->
+                            scrollIndexByCollection.value = scrollIndexByCollection.value
+                                .toMutableMap()
+                                .apply { put(collection.collectionId, newIndex) }
+                        },
+                        progressMap = if (collection.collectionId == "continue_watching") progressMap else emptyMap(),
+                        metadataItem = if (isFocusedCollection) focusedItem else null
                     )
                 }
             }
@@ -374,9 +392,10 @@ private fun SearchButton(
 }
 
 @Composable
-private fun CollectionRow(
+private fun CollectionRowModern(
     title: String,
     collection: OnDemandCollectionUi,
+    isFocused: Boolean,
     onRequestMore: (collectionId: String, lastVisibleIndex: Int) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
     onItemFocused: (VodItem) -> Unit,
@@ -389,24 +408,59 @@ private fun CollectionRow(
     initialScrollIndex: Int,
     onFocusedIndexChange: (Int) -> Unit,
     onScrollIndexChange: (Int) -> Unit,
-    progressMap: Map<String, Float> = emptyMap()
+    progressMap: Map<String, Float> = emptyMap(),
+    metadataItem: VodItem? = null
 ) {
+    // Animated alpha for non-focused collections
+    val collectionAlpha by animateFloatAsState(
+        targetValue = if (isFocused) 1f else 0.5f,
+        animationSpec = tween(durationMillis = 300),
+        label = "collectionAlpha"
+    )
+
     Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (isFocused) Color.Black.copy(alpha = 0.4f) else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = if (isFocused) 16.dp else 0.dp)
     ) {
         val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
 
+        // Collection header
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (isFocused) 12.dp else 0.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = title,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Indicator for focused collection
+                if (isFocused) {
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .height(24.dp)
+                            .background(AccentColor, RoundedCornerShape(2.dp))
+                    )
+                }
+
+                Text(
+                    text = title,
+                    color = Color.White.copy(alpha = collectionAlpha),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.SemiBold,
+                        fontSize = if (isFocused) 24.sp else 20.sp
+                    )
+                )
+            }
 
             // Position indicator
             if (collection.items.isNotEmpty()) {
@@ -415,8 +469,8 @@ private fun CollectionRow(
                     rowState.layoutInfo.visibleItemsInfo.size).coerceAtMost(collection.total)
 
                 Text(
-                    text = "$visibleStart-$visibleEnd of ${collection.total}",
-                    color = AccentColor.copy(alpha = 0.8f),
+                    text = "$visibleStart-$visibleEnd / ${collection.total}",
+                    color = AccentColor.copy(alpha = collectionAlpha * 0.8f),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.Medium
                     )
@@ -428,7 +482,8 @@ private fun CollectionRow(
             Text(
                 text = collection.error,
                 color = Color.Red.copy(alpha = 0.9f),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = if (isFocused) 12.dp else 0.dp)
             )
         }
 
@@ -472,16 +527,17 @@ private fun CollectionRow(
 
         LazyRow(
             state = rowState,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (isFocused) 12.dp else 0.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             if (collection.items.isEmpty() && collection.isLoading) {
                 items(8) { _ ->
-                    PosterSkeletonCard(modifier = Modifier.width(128.dp))
+                    PosterSkeletonCard(modifier = Modifier.width(160.dp).height(240.dp))
                 }
             } else {
                 itemsIndexed(collection.items, key = { _, item -> item.id }) { itemIndex, item ->
-                    OnDemandPosterCard(
+                    OnDemandPosterCardModern(
                         item = item,
                         onOpenDetails = onOpenDetails,
                         onLeftEdgeFocusChanged = onLeftEdgeFocusChanged,
@@ -493,16 +549,26 @@ private fun CollectionRow(
                         onNavigateUp = onNavigateUp,
                         onNavigateDown = onNavigateDown,
                         progressPercentage = progressMap[item.id],
+                        collectionAlpha = collectionAlpha,
                         modifier = if (itemIndex == targetFocusIndex) Modifier.focusRequester(focusRequester) else Modifier
                     )
                 }
             }
         }
+
+        // Metadata panel for focused collection
+        if (isFocused && metadataItem != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OnDemandMetadataPanelCompact(
+                item = metadataItem,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+        }
     }
 }
 
 @Composable
-private fun OnDemandPosterCard(
+private fun OnDemandPosterCardModern(
     item: VodItem,
     onOpenDetails: (VodItem) -> Unit,
     onLeftEdgeFocusChanged: (Boolean) -> Unit,
@@ -510,56 +576,50 @@ private fun OnDemandPosterCard(
     onNavigateUp: () -> Unit,
     onNavigateDown: () -> Unit,
     progressPercentage: Float? = null,
+    collectionAlpha: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
 
-    // Animated properties for smooth transitions
+    // Smooth subtle animations - NO crazy width changes
     val animatedBorderColor by animateColorAsState(
-        targetValue = if (focused) AccentColor else Color.White.copy(alpha = 0.12f),
-        animationSpec = tween(durationMillis = 200),
+        targetValue = if (focused) AccentColor else Color.White.copy(alpha = 0.15f),
+        animationSpec = tween(durationMillis = 250),
         label = "borderColor"
     )
-    val animatedBackgroundColor by animateColorAsState(
-        targetValue = if (focused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-        animationSpec = tween(durationMillis = 200),
-        label = "backgroundColor"
-    )
-    val animatedCardWidth by animateDpAsState(
-        targetValue = if (focused) 280.dp else 128.dp,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
-        label = "cardWidth"
-    )
     val animatedElevation by animateDpAsState(
-        targetValue = if (focused) 8.dp else 2.dp,
-        animationSpec = tween(durationMillis = 200),
+        targetValue = if (focused) 12.dp else 2.dp,
+        animationSpec = tween(durationMillis = 250),
         label = "elevation"
     )
     val animatedBorderWidth by animateDpAsState(
-        targetValue = if (focused) 3.dp else 1.dp,
-        animationSpec = tween(durationMillis = 200),
+        targetValue = if (focused) 4.dp else 2.dp,
+        animationSpec = tween(durationMillis = 250),
         label = "borderWidth"
     )
+    val animatedScale by animateFloatAsState(
+        targetValue = if (focused) 1.08f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 200f),
+        label = "scale"
+    )
 
-    val cardHeight = 180.dp
-    // Use backdrop for focused cards if available, otherwise poster
-    // This prevents image reload when focusing
-    val imageUrl = if (focused && item.backdropUrl != null) {
-        item.backdropUrl
-    } else {
-        item.posterUrl
-    }
+    val cardWidth = 160.dp
+    val cardHeight = 240.dp
 
     Surface(
         onClick = { onOpenDetails(item) },
-        color = animatedBackgroundColor,
-        shape = RoundedCornerShape(if (focused) 8.dp else 4.dp),
+        color = Color.Black.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(animatedBorderWidth, animatedBorderColor),
         tonalElevation = animatedElevation,
-        shadowElevation = if (focused) 12.dp else 0.dp,
+        shadowElevation = if (focused) 16.dp else 0.dp,
         modifier = modifier
-            .width(animatedCardWidth)
+            .width(cardWidth)
             .height(cardHeight)
+            .graphicsLayer {
+                scaleX = animatedScale
+                scaleY = animatedScale
+            }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
@@ -590,10 +650,13 @@ private fun OnDemandPosterCard(
             .focusable()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (!imageUrl.isNullOrBlank()) {
+            val posterUrl = item.posterUrl
+            if (!posterUrl.isNullOrBlank()) {
                 OptimizedAsyncImage(
-                    url = imageUrl,
-                    modifier = Modifier.fillMaxSize(),
+                    url = posterUrl,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = collectionAlpha },
                     contentScale = ContentScale.Crop,
                     targetSizePx = 512
                 )
@@ -601,7 +664,8 @@ private fun OnDemandPosterCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.35f)),
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .graphicsLayer { alpha = collectionAlpha },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -612,18 +676,33 @@ private fun OnDemandPosterCard(
                 }
             }
 
-            // Content type badge (top-right corner)
+            // Gradient overlay for better text readability
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = if (focused) 0.7f else 0.5f)
+                            ),
+                            startY = 100f
+                        )
+                    )
+            )
+
+            // Content type badge
             item.contentType?.let { contentType ->
                 Surface(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.TopStart)
                         .padding(8.dp),
                     color = when (contentType.lowercase()) {
-                        "movie" -> Color(0xFF2196F3).copy(alpha = 0.9f)
-                        "series" -> Color(0xFF9C27B0).copy(alpha = 0.9f)
-                        else -> Color.Gray.copy(alpha = 0.9f)
+                        "movie" -> Color(0xFF00BCD4).copy(alpha = 0.95f)
+                        "series" -> Color(0xFFE91E63).copy(alpha = 0.95f)
+                        else -> Color.Gray.copy(alpha = 0.95f)
                     },
-                    shape = RoundedCornerShape(4.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         text = when (contentType.lowercase()) {
@@ -631,35 +710,56 @@ private fun OnDemandPosterCard(
                             "series" -> "SERIES"
                             else -> contentType.uppercase()
                         },
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            // Title overlay at bottom
+            if (focused) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = item.displayTitle ?: "Unknown",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
             // Progress bar overlay
             progressPercentage?.let { progress ->
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomStart)
                 ) {
-                    // Progress bar
+                    // Background
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
-                            .background(Color.Black.copy(alpha = 0.6f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                                .height(6.dp)
-                                .background(AccentColor)
-                        )
-                    }
+                            .height(4.dp)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    )
+                    // Progress
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .height(4.dp)
+                            .background(AccentColor)
+                    )
                 }
             }
         }
@@ -805,6 +905,104 @@ private fun OnDemandMetadataPanel(item: VodItem?) {
                 overflow = TextOverflow.Ellipsis
             )
             }
+        }
+    }
+}
+
+@Composable
+private fun OnDemandMetadataPanelCompact(
+    item: VodItem,
+    modifier: Modifier = Modifier
+) {
+    val year = item.releaseDate?.extractYearFromDate() ?: item.displayTitle?.extractYearFromTitle()
+    val rating = item.tmdbVoteAverage?.let { String.format("%.1f", it) }
+    val genre = item.genreNames
+        ?.flatMap { it.split(",") }
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.distinct()
+        ?.take(2)
+        ?.joinToString(" • ")
+    val synopsis = item.resolvedDescription()?.takeIf { it.isNotBlank() }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                color = Color.Black.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(16.dp)
+    ) {
+        // Title
+        Text(
+            text = item.displayTitle ?: "Unknown",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        // Metadata row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            rating?.let {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "★",
+                        color = Color(0xFFFFD700),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.9f),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                }
+            }
+
+            year?.let {
+                Text(
+                    text = it,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            genre?.let {
+                Text(
+                    text = it,
+                    color = AccentColor.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Synopsis
+        synopsis?.let {
+            Text(
+                text = it,
+                color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    lineHeight = 16.sp
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
