@@ -170,12 +170,12 @@ class PlayerManager(context: Context) {
                 .build()
 
             BufferLevel.HIGH -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(20000, 50000, 20000, 25000)
+                .setBufferDurationsMs(25000, 50000, 20000, 25000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             BufferLevel.MAXIMUM -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(25000, 60000, 25000, 30000)
+                .setBufferDurationsMs(30000, 60000, 25000, 30000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         }
