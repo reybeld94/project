@@ -194,7 +194,7 @@ fun OnDemandScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black)
                 .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
             // Header
@@ -290,7 +290,7 @@ fun OnDemandScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Info panel - only half width on left
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -301,23 +301,36 @@ fun OnDemandScreen(
                 Spacer(modifier = Modifier.weight(0.5f))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Next collection preview
+            // Next collection preview - clearly visible
             AnimatedVisibility(
                 visible = nextCollection != null,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
                 nextCollection?.let { collection ->
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = collection.title.ifBlank { "Next Collection" },
-                            color = Color.White.copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = collection.title.ifBlank { "Next Collection" },
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
-                        )
+                            Text(
+                                text = "↓ Scroll down",
+                                color = AccentColor.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
                         CollectionRowPreview(
                             items = collection.items.take(8)
                         )
@@ -801,7 +814,7 @@ private fun OnDemandMetadataPanelHalf(
     modifier: Modifier = Modifier
 ) {
     if (item == null) {
-        Box(modifier = modifier.height(120.dp))
+        Box(modifier = modifier.height(100.dp))
         return
     }
 
@@ -817,79 +830,75 @@ private fun OnDemandMetadataPanelHalf(
     val synopsis = item.resolvedDescription()?.takeIf { it.isNotBlank() } ?: "No description available."
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
-            .background(
-                color = Color.Black.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(18.dp)
     ) {
-        // Title
-        Text(
-            text = item.displayTitle ?: "Select a title",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.Bold
-            ),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        // Metadata row
+        // Title with rating and year on same line
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            rating?.let {
-                Surface(
-                    color = AccentColor.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, AccentColor.copy(alpha = 0.5f))
-                ) {
+            Text(
+                text = item.displayTitle ?: "Select a title",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                rating?.let {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "★",
                             color = Color(0xFFFFD700),
-                            style = MaterialTheme.typography.labelMedium
+                            style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
                             text = it,
                             color = Color.White,
-                            style = MaterialTheme.typography.labelMedium.copy(
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             )
                         )
                     }
                 }
-            }
 
-            year?.let {
-                Text(
-                    text = it,
-                    color = Color.White.copy(alpha = 0.7f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                year?.let {
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
+        }
 
-            genre?.let {
-                Text(
-                    text = it,
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        // Genre
+        genre?.let {
+            Text(
+                text = it,
+                color = AccentColor.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
         // Synopsis
         Text(
             text = synopsis,
-            color = Color.White.copy(alpha = 0.8f),
+            color = Color.White.copy(alpha = 0.85f),
             style = MaterialTheme.typography.bodyMedium.copy(
                 lineHeight = 20.sp
             ),
@@ -904,17 +913,17 @@ private fun CollectionRowPreview(
     items: List<VodItem>
 ) {
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
             Surface(
-                color = Color.White.copy(alpha = 0.05f),
-                shape = RoundedCornerShape(4.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                 modifier = Modifier
-                    .width(100.dp)
-                    .height(140.dp)
+                    .width(120.dp)
+                    .height(170.dp)
             ) {
                 val poster = item.posterUrl
                 if (!poster.isNullOrBlank()) {
