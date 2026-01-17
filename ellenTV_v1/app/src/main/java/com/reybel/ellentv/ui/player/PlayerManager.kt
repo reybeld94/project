@@ -160,22 +160,22 @@ class PlayerManager(context: Context) {
         // Buffer según nivel
         val loadControl = when (level) {
             BufferLevel.LOW -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(3000, 15000, 1500, 3000)
+                .setBufferDurationsMs(3000, 15000, 1500, 4000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             BufferLevel.NORMAL -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5000, 30000, 2500, 5000)
+                .setBufferDurationsMs(5000, 30000, 2000, 8000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             BufferLevel.HIGH -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(25000, 50000, 20000, 25000)
+                .setBufferDurationsMs(25000, 60000, 3000, 15000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             BufferLevel.MAXIMUM -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(30000, 60000, 25000, 30000)
+                .setBufferDurationsMs(30000, 90000, 3000, 20000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         }
