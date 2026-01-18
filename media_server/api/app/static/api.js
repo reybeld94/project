@@ -134,6 +134,17 @@ export const api = {
       req(`/collections/${encodeURIComponent(idOrSlug)}/items?page=${page}&stale_while_revalidate=${stale_while_revalidate}`),
   },
 
+  providerUsers: {
+    list: ({ providerId=null }={}) => {
+      const pid = providerId ? `?provider_id=${encodeURIComponent(providerId)}` : "";
+      return req(`/provider-users${pid}`);
+    },
+    create: (payload) => req("/provider-users", { method:"POST", body: payload }),
+    get: (userId) => req(`/provider-users/${encodeURIComponent(userId)}`),
+    getByCode: (code) => req(`/provider-users/by-code/${encodeURIComponent(code)}`),
+    update: (userId, payload) => req(`/provider-users/${encodeURIComponent(userId)}`, { method:"PATCH", body: payload }),
+    remove: (userId) => req(`/provider-users/${encodeURIComponent(userId)}`, { method:"DELETE" }),
+  },
 
     vod: {
   listAll: ({ q="", limit=60, offset=0, activeOnly=true, synced=null }={}) => {

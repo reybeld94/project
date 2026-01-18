@@ -1,5 +1,5 @@
 import { el } from "../../ui.js";
-import { apiGet, apiPost, apiPatch, apiDelete } from "../../api.js";
+import { api } from "../../api.js";
 
 let cachedUsers = null;
 let cachedProviders = null;
@@ -10,8 +10,8 @@ export function UsersTab(appState) {
   async function loadData() {
     try {
       const [users, providers] = await Promise.all([
-        apiGet("/provider-users"),
-        apiGet("/providers"),
+        api.providerUsers.list(),
+        api.providers.list(),
       ]);
       cachedUsers = users;
       cachedProviders = providers;
@@ -251,7 +251,7 @@ export function UsersTab(appState) {
       };
 
       try {
-        await apiPost("/provider-users", payload);
+        await api.providerUsers.create(payload);
         modal.remove();
         loadData();
       } catch (err) {
@@ -381,7 +381,7 @@ export function UsersTab(appState) {
       }
 
       try {
-        await apiPatch(`/provider-users/${user.id}`, payload);
+        await api.providerUsers.update(user.id, payload);
         modal.remove();
         loadData();
       } catch (err) {
@@ -398,7 +398,7 @@ export function UsersTab(appState) {
     }
 
     try {
-      await apiDelete(`/provider-users/${user.id}`);
+      await api.providerUsers.remove(user.id);
       loadData();
     } catch (err) {
       alert(`Error deleting user: ${err.message}`);
