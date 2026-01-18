@@ -71,6 +71,16 @@ class TmdbConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
+class ProviderAutoSyncConfig(Base):
+    __tablename__ = "provider_auto_sync_config"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class TmdbCollection(Base):
     __tablename__ = "tmdb_collections"
     __table_args__ = (

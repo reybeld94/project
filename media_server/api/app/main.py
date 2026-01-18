@@ -22,6 +22,8 @@ from .routers.tmdb import (
     sync_series as tmdb_sync_series,
     get_or_create_cfg as tmdb_get_or_create_cfg,
 )
+from .routers.settings import router as settings_router
+from .provider_auto_sync import get_or_create_provider_auto_sync, run_provider_auto_sync
 
 
 log = logging.getLogger("mini_media_server")
@@ -216,6 +218,47 @@ async def _start_collections_auto_refresh():
     asyncio.create_task(loop())
 
 
+def _run_provider_auto_sync_blocking():
+    db = SessionLocal()
+    try:
+        return run_provider_auto_sync(db)
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+async def _start_provider_auto_sync():
+    async def loop():
+        await asyncio.sleep(4)
+        while True:
+            db = SessionLocal()
+            try:
+                cfg = get_or_create_provider_auto_sync(db)
+                interval_minutes = int(cfg.interval_minutes or 0)
+            finally:
+                db.close()
+
+            if interval_minutes <= 0:
+                log.info("Provider auto-sync: disabled (interval_minutes=0)")
+                await asyncio.sleep(60)
+                continue
+
+            interval_s = max(60, interval_minutes * 60)
+            log.info("Provider auto-sync: starting (every %s min)", interval_minutes)
+
+            try:
+                result = await asyncio.to_thread(_run_provider_auto_sync_blocking)
+                log.info(
+                    "Provider auto-sync complete: providers=%s failures=%s",
+                    result.get("providers", 0),
+                    sum(1 for item in result.get("results", []) if not item.get("ok")),
+                )
+            except Exception as e:
+                log.exception("Provider auto-sync loop error: %s", e)
+
+            await asyncio.sleep(interval_s)
+
+    asyncio.create_task(loop())
 
 
 app.include_router(providers_router)
@@ -225,3 +268,4 @@ app.include_router(vod_router)
 app.include_router(series_router)
 app.include_router(tmdb_router)
 app.include_router(collections_router)
+app.include_router(settings_router)
