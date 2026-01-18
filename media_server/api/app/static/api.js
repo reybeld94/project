@@ -112,6 +112,11 @@ export const api = {
       req(`/tmdb/sync/series?limit=${limit}`, { method:"POST" }),
   },
 
+  settings: {
+    getProviderAutoSync: () => req("/settings/provider-auto-sync"),
+    saveProviderAutoSync: (payload) => req("/settings/provider-auto-sync", { method:"PATCH", body: payload }),
+  },
+
 
   collections: {
     list: ({ q="", enabled=null, source_type="", limit=50, offset=0 }={}) => {

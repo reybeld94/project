@@ -118,6 +118,14 @@ class TmdbConfigUpdate(BaseModel):
     region: str | None = None
     requests_per_second: int | None = None
 
+
+class ProviderAutoSyncConfigOut(BaseModel):
+    interval_minutes: int
+
+
+class ProviderAutoSyncConfigUpdate(BaseModel):
+    interval_minutes: int | None = Field(default=None, ge=0, le=10080)
+
 class TmdbStatusOut(BaseModel):
     enabled: bool
     movies_total: int
