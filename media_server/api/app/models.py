@@ -73,9 +73,14 @@ class TmdbConfig(Base):
 
 class ProviderAutoSyncConfig(Base):
     __tablename__ = "provider_auto_sync_config"
+    __table_args__ = (UniqueConstraint("provider_id", name="uq_provider_auto_sync_provider_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id"), nullable=False)
+    provider = relationship("Provider", lazy="joined")
+
     interval_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

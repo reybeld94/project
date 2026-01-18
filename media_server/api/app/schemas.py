@@ -16,6 +16,7 @@ class ProviderOut(BaseModel):
     base_url: str
     username: str
     is_active: bool
+    auto_sync_interval_minutes: int
 
     class Config:
         from_attributes = True
@@ -120,7 +121,9 @@ class TmdbConfigUpdate(BaseModel):
 
 
 class ProviderAutoSyncConfigOut(BaseModel):
+    provider_id: UUID
     interval_minutes: int
+    last_run_at: datetime | None = None
 
 
 class ProviderAutoSyncConfigUpdate(BaseModel):
