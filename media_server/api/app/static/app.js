@@ -10,7 +10,7 @@ const appState = {
   live: { q:"", limit:50, offset:0, providerId:null, approved:null },
   movies: { q:"", limit:60, offset:0 },
   series: { q:"", limit:60, offset:0 },
-  epg: { q:"", limit:80, offset:0, hours:8, approvedOnly:true, providerId:null },
+  epg: { q:"", limit:80, offset:0, hours:8, approvedOnly:true, providerId:null, sourceId:null },
 
   moviesCache: new Map(),
   seriesCache: new Map(),
