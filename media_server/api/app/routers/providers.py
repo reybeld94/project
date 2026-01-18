@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.deps import get_db
-from app.models import Category, LiveStream, Provider, SeriesItem, VodStream
+from app.models import Category, LiveStream, Provider, ProviderUser, SeriesItem, VodStream
 from app.provider_auto_sync import get_or_create_provider_auto_sync, update_provider_auto_sync
 from app.schemas import ProviderAutoSyncConfigOut, ProviderAutoSyncConfigUpdate, ProviderCreate, ProviderOut, ProviderUpdate
 from app.xtream_client import XtreamError, xtream_get
@@ -23,6 +23,42 @@ def _provider_out(db: Session, provider: Provider) -> ProviderOut:
         username=provider.username,
         is_active=provider.is_active,
         auto_sync_interval_minutes=cfg.interval_minutes,
+    )
+
+
+def _get_sync_credentials(db: Session, provider: Provider) -> tuple[str, str]:
+    """
+    Get credentials for sync operations (catalog sync, test, etc).
+
+    Priority:
+    1. Use ADMIN user if exists and is enabled
+    2. Fall back to provider's own credentials (legacy)
+
+    Returns:
+        tuple[str, str]: (username, password)
+
+    Raises:
+        HTTPException: If no valid credentials found
+    """
+    # Try to get ADMIN user from this provider
+    admin_user = db.execute(
+        select(ProviderUser).where(
+            ProviderUser.provider_id == provider.id,
+            ProviderUser.alias == "ADMIN",
+            ProviderUser.is_enabled == True,
+        )
+    ).scalar_one_or_none()
+
+    if admin_user:
+        return admin_user.username, admin_user.password
+
+    # Fall back to provider credentials (legacy)
+    if provider.username and provider.password:
+        return provider.username, provider.password
+
+    raise HTTPException(
+        status_code=400,
+        detail="No credentials available for sync. Please create an ADMIN user or set provider credentials."
     )
 
 
@@ -129,8 +165,10 @@ def test_provider(provider_id: str, db: Session = Depends(get_db)):
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
+    username, password = _get_sync_credentials(db, p)
+
     try:
-        data = xtream_get(p.base_url, p.username, p.password, "get_live_categories")
+        data = xtream_get(p.base_url, username, password, "get_live_categories")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Xtream test failed: {e}")
 
@@ -196,9 +234,10 @@ def _sync_vod_streams_for_provider(
     deactivate_missing: bool = False,
 ) -> dict:
     started = datetime.utcnow()
+    username, password = _get_sync_credentials(db, provider)
 
     try:
-        vod_cats = xtream_get(provider.base_url, provider.username, provider.password, "get_vod_categories")
+        vod_cats = xtream_get(provider.base_url, username, password, "get_vod_categories")
         if isinstance(vod_cats, list):
             _sync_one_category_set(db, provider, "vod", vod_cats)
             db.commit()
@@ -230,8 +269,8 @@ def _sync_vod_streams_for_provider(
         try:
             raw = xtream_get(
                 provider.base_url,
-                provider.username,
-                provider.password,
+                username,
+                password,
                 "get_vod_streams",
                 timeout=120.0,
                 category_id=cat.provider_category_id,
@@ -416,9 +455,10 @@ def _sync_series_items_for_provider(
     include_inactive_categories: bool = True,
 ) -> dict:
     started = datetime.utcnow()
+    username, password = _get_sync_credentials(db, provider)
 
     try:
-        series_cats = xtream_get(provider.base_url, provider.username, provider.password, "get_series_categories")
+        series_cats = xtream_get(provider.base_url, username, password, "get_series_categories")
         if isinstance(series_cats, list):
             _sync_one_category_set(db, provider, "series", series_cats)
             db.commit()
@@ -449,8 +489,8 @@ def _sync_series_items_for_provider(
         try:
             raw = xtream_get(
                 provider.base_url,
-                provider.username,
-                provider.password,
+                username,
+                password,
                 "get_series",
                 category_id=cat.provider_category_id,
             )
@@ -553,10 +593,12 @@ def sync_categories(provider_id: str, db: Session = Depends(get_db)):
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
+    username, password = _get_sync_credentials(db, p)
+
     try:
-        live = xtream_get(p.base_url, p.username, p.password, "get_live_categories")
-        vod = xtream_get(p.base_url, p.username, p.password, "get_vod_categories")
-        series = xtream_get(p.base_url, p.username, p.password, "get_series_categories")
+        live = xtream_get(p.base_url, username, password, "get_live_categories")
+        vod = xtream_get(p.base_url, username, password, "get_vod_categories")
+        series = xtream_get(p.base_url, username, password, "get_series_categories")
     except XtreamError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -610,6 +652,8 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
+    username, password = _get_sync_credentials(db, p)
+
     cat = db.execute(
         select(Category).where(
             Category.provider_id == p.id,
@@ -623,7 +667,7 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
 
     # Xtream: action=get_live_streams, y muchos paneles aceptan category_id como filtro
     try:
-        raw = xtream_get(p.base_url, p.username, p.password, "get_live_streams", category_id=category_ext_id)
+        raw = xtream_get(p.base_url, username, password, "get_live_streams", category_id=category_ext_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Xtream sync failed: {e}")
 
@@ -716,6 +760,7 @@ def sync_all(
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
+    username, password = _get_sync_credentials(db, p)
     started = datetime.utcnow()
 
     result = {
@@ -742,7 +787,7 @@ def sync_all(
 
         for cat in cats:
             raw = xtream_get(
-                p.base_url, p.username, p.password,
+                p.base_url, username, password,
                 "get_live_streams",
                 category_id=cat.provider_category_id
             )
@@ -905,6 +950,8 @@ def sync_series_items(provider_id: str, category_ext_id: int, db: Session = Depe
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
 
+    username, password = _get_sync_credentials(db, p)
+
     cat = db.execute(
         select(Category).where(
             Category.provider_id == p.id,
@@ -916,7 +963,7 @@ def sync_series_items(provider_id: str, category_ext_id: int, db: Session = Depe
         raise HTTPException(status_code=404, detail="Category not found for this provider")
 
     try:
-        raw = xtream_get(p.base_url, p.username, p.password, "get_series", category_id=category_ext_id)
+        raw = xtream_get(p.base_url, username, password, "get_series", category_id=category_ext_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Xtream sync failed: {e}")
 

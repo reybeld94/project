@@ -21,7 +21,7 @@ def _get_credentials(db: Session, provider: Provider, unique_code: str | None = 
 
     Priority:
     1. If unique_code provided, use those credentials (must be enabled)
-    2. If provider has users, pick a random enabled user
+    2. Use ADMIN user if exists and is enabled
     3. Fall back to provider's own credentials (legacy)
 
     Returns:
@@ -47,17 +47,17 @@ def _get_credentials(db: Session, provider: Provider, unique_code: str | None = 
 
         return user.username, user.password
 
-    # Try to get a random enabled user from this provider
-    users = db.execute(
+    # Try to get ADMIN user from this provider
+    admin_user = db.execute(
         select(ProviderUser).where(
             ProviderUser.provider_id == provider.id,
+            ProviderUser.alias == "ADMIN",
             ProviderUser.is_enabled == True,
         )
-    ).scalars().all()
+    ).scalar_one_or_none()
 
-    if users:
-        user = random.choice(users)
-        return user.username, user.password
+    if admin_user:
+        return admin_user.username, admin_user.password
 
     # Fall back to provider credentials (legacy)
     if provider.username and provider.password:
