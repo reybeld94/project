@@ -6,11 +6,25 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_db
 from app.models import Category, LiveStream, Provider, SeriesItem, VodStream
-from app.schemas import ProviderCreate, ProviderOut, ProviderUpdate
+from app.provider_auto_sync import get_or_create_provider_auto_sync, update_provider_auto_sync
+from app.schemas import ProviderAutoSyncConfigOut, ProviderAutoSyncConfigUpdate, ProviderCreate, ProviderOut, ProviderUpdate
 from app.xtream_client import XtreamError, xtream_get
 
 
 router = APIRouter(prefix="/providers", tags=["providers"])
+
+
+def _provider_out(db: Session, provider: Provider) -> ProviderOut:
+    cfg = get_or_create_provider_auto_sync(db, provider.id)
+    return ProviderOut(
+        id=provider.id,
+        name=provider.name,
+        base_url=provider.base_url,
+        username=provider.username,
+        is_active=provider.is_active,
+        auto_sync_interval_minutes=cfg.interval_minutes,
+    )
+
 
 @router.post("", response_model=ProviderOut)
 def create_provider(payload: ProviderCreate, db: Session = Depends(get_db)):
@@ -25,19 +39,19 @@ def create_provider(payload: ProviderCreate, db: Session = Depends(get_db)):
     db.add(p)
     db.commit()
     db.refresh(p)
-    return p
+    return _provider_out(db, p)
 
 @router.get("", response_model=list[ProviderOut])
 def list_providers(db: Session = Depends(get_db)):
     providers = db.execute(select(Provider).order_by(Provider.created_at.desc())).scalars().all()
-    return providers
+    return [_provider_out(db, provider) for provider in providers]
 
 @router.get("/{provider_id}", response_model=ProviderOut)
 def get_provider(provider_id: str, db: Session = Depends(get_db)):
     p = db.get(Provider, provider_id)
     if not p:
         raise HTTPException(status_code=404, detail="Provider not found")
-    return p
+    return _provider_out(db, p)
 
 @router.patch("/{provider_id}", response_model=ProviderOut)
 def update_provider(provider_id: str, payload: ProviderUpdate, db: Session = Depends(get_db)):
@@ -72,7 +86,41 @@ def update_provider(provider_id: str, payload: ProviderUpdate, db: Session = Dep
         db.commit()
         db.refresh(p)
 
-    return p
+    return _provider_out(db, p)
+
+
+@router.get("/{provider_id}/auto-sync", response_model=ProviderAutoSyncConfigOut)
+def get_provider_auto_sync(provider_id: str, db: Session = Depends(get_db)):
+    p = db.get(Provider, provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    cfg = get_or_create_provider_auto_sync(db, p.id)
+    return ProviderAutoSyncConfigOut(
+        provider_id=cfg.provider_id,
+        interval_minutes=cfg.interval_minutes,
+        last_run_at=cfg.last_run_at,
+    )
+
+
+@router.patch("/{provider_id}/auto-sync", response_model=ProviderAutoSyncConfigOut)
+def update_provider_auto_sync_config(
+    provider_id: str,
+    payload: ProviderAutoSyncConfigUpdate,
+    db: Session = Depends(get_db),
+):
+    p = db.get(Provider, provider_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    interval_minutes = payload.interval_minutes
+    if interval_minutes is None:
+        cfg = get_or_create_provider_auto_sync(db, p.id)
+    else:
+        cfg = update_provider_auto_sync(db, p.id, interval_minutes)
+    return ProviderAutoSyncConfigOut(
+        provider_id=cfg.provider_id,
+        interval_minutes=cfg.interval_minutes,
+        last_run_at=cfg.last_run_at,
+    )
 
 
 @router.get("/{provider_id}/test")

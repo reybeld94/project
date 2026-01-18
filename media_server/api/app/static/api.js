@@ -90,6 +90,8 @@ export const api = {
     test: (id) => req(`/providers/${id}/test`),
     patch: (id, payload) => req(`/providers/${id}`, { method:"PATCH", body: payload }),
     syncAll: (id) => req(`/providers/${id}/sync/all`, { method:"POST" }),
+    getAutoSync: (id) => req(`/providers/${id}/auto-sync`),
+    saveAutoSync: (id, payload) => req(`/providers/${id}/auto-sync`, { method:"PATCH", body: payload }),
   },
 
   epg: {
@@ -116,10 +118,6 @@ export const api = {
       req(`/tmdb/sync/series?limit=${limit}`, { method:"POST" }),
   },
 
-  settings: {
-    getProviderAutoSync: () => req("/settings/provider-auto-sync"),
-    saveProviderAutoSync: (payload) => req("/settings/provider-auto-sync", { method:"PATCH", body: payload }),
-  },
 
 
   collections: {

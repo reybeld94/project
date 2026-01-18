@@ -16,6 +16,21 @@ export function ProvidersTab(appState) {
       list.appendChild(el("div", { class:"hz-glass rounded-2xl p-5 text-sm text-zinc-300" }, "No hay providers aún."));
     } else {
       for (const p of items) {
+        const autoSyncInput = el("input", {
+          class: "w-20 rounded-lg bg-zinc-900/70 border border-white/10 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus-visible:hz-focus",
+          type: "number",
+          min: "0",
+          step: "1",
+          value: String(p.auto_sync_interval_minutes ?? 60),
+        });
+        const autoSyncStatus = el(
+          "div",
+          { class: "text-[11px] text-zinc-500" },
+          (p.auto_sync_interval_minutes ?? 60) > 0
+            ? `Auto Sync: ${p.auto_sync_interval_minutes ?? 60} min`
+            : "Auto Sync: desactivado"
+        );
+
         list.appendChild(
           el("div", { class:"hz-glass rounded-2xl p-4 flex items-center justify-between gap-4" }, [
             el("div", {}, [
@@ -26,8 +41,9 @@ export function ProvidersTab(appState) {
               el("div", { class:"text-xs text-zinc-500 mt-1" }, p.base_url),
               el("div", { class:"text-xs text-zinc-500" }, `user: ${p.username}`),
             ]),
-            el("div", { class:"flex items-center gap-2" }, [
-              button("Test", { tone:"zinc", small:true, onClick: async ()=>{
+            el("div", { class:"flex flex-col items-end gap-2" }, [
+              el("div", { class:"flex items-center gap-2" }, [
+                button("Test", { tone:"zinc", small:true, onClick: async ()=>{
                 status.textContent = "Probando…";
                 try {
                   const r = await api.providers.test(p.id);
@@ -35,8 +51,8 @@ export function ProvidersTab(appState) {
                 } catch(e) {
                   status.textContent = `Error: ${e.message}`;
                 }
-              }}),
-              button("Sync", { tone:"blue", small:true, onClick: async ()=>{
+                }}),
+                button("Sync", { tone:"blue", small:true, onClick: async ()=>{
                 status.textContent = "Sincronizando…";
                 try {
                   const r = await api.providers.syncAll(p.id);
@@ -44,8 +60,8 @@ export function ProvidersTab(appState) {
                 } catch(e) {
                   status.textContent = `Error: ${e.message}`;
                 }
-              }}),
-              button(p.is_active ? "Disable" : "Enable", {
+                }}),
+                button(p.is_active ? "Disable" : "Enable", {
                 tone: p.is_active ? "zinc" : "blue",
                 small: true,
                 onClick: async () => {
@@ -58,6 +74,27 @@ export function ProvidersTab(appState) {
                       }
                     }
                 }),
+              ]),
+              el("div", { class:"flex items-center gap-2" }, [
+                el("div", { class:"text-xs text-zinc-500" }, "Auto Sync (min)"),
+                autoSyncInput,
+                button("Guardar", { tone:"zinc", small:true, onClick: async ()=>{
+                  const raw = Number.parseInt(autoSyncInput.value, 10);
+                  const interval = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+                  status.textContent = "Guardando Auto Sync…";
+                  try {
+                    const cfg = await api.providers.saveAutoSync(p.id, { interval_minutes: interval });
+                    autoSyncInput.value = String(cfg.interval_minutes ?? interval);
+                    autoSyncStatus.textContent = cfg.interval_minutes > 0
+                      ? `Auto Sync: ${cfg.interval_minutes} min`
+                      : "Auto Sync: desactivado";
+                    status.textContent = "Auto Sync actualizado";
+                  } catch (e) {
+                    status.textContent = `Error: ${e.message}`;
+                  }
+                }}),
+              ]),
+              autoSyncStatus,
             ])
           ])
         );

@@ -5,11 +5,9 @@ import { EpgTab } from "./settings/epg.js";
 import { DocsTab } from "./settings/docs.js";
 import { TmdbTab } from "./settings/tmdb.js";
 import { CollectionsTab } from "./settings/collections.js";
-import { AutoSyncTab } from "./settings/auto_sync.js";
 
 const TABS = [
   { key:"providers", label:"Providers" },
-  { key:"auto-sync", label:"Auto Sync" },
   { key:"epg", label:"EPG" },
   { key:"docs", label:"API" },
   { key:"tmdb", label:"TMDB" },
@@ -32,7 +30,6 @@ export function SettingsPage(appState, subRoute) {
 
   let content = null;
   if (current === "providers") content = ProvidersTab(appState);
-  else if (current === "auto-sync") content = AutoSyncTab(appState);
   else if (current === "epg") content = EpgTab(appState);
   else if (current === "docs") content = DocsTab(appState);
   else if (current === "tmdb") content = TmdbTab(appState);
