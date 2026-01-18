@@ -99,12 +99,16 @@ private enum class EpgFocusArea {
 @OptIn(UnstableApi::class)
 class MainActivity : ComponentActivity() {
     private lateinit var playerManager: com.reybel.ellentv.ui.player.PlayerManager
+    private lateinit var prefsManager: com.reybel.ellentv.data.PreferencesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         super.onCreate(savedInstanceState)
+
+        prefsManager = com.reybel.ellentv.data.PreferencesManager(applicationContext)
+
         val homeVm: HomeViewModel by viewModels()
         val onDemandVm: OnDemandViewModel by viewModels {
             object : androidx.lifecycle.ViewModelProvider.Factory {
@@ -126,7 +130,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(typography = AppTypography) {
-                TvHomeScreen(playerManager, homeVm, onDemandVm)
+                var hasUniqueCode by remember { mutableStateOf(prefsManager.hasUniqueCode()) }
+
+                if (hasUniqueCode) {
+                    TvHomeScreen(playerManager, homeVm, onDemandVm, prefsManager)
+                } else {
+                    com.reybel.ellentv.ui.setup.UniqueCodeSetupScreen(
+                        onCodeSubmitted = { code ->
+                            prefsManager.saveUniqueCode(code)
+                            hasUniqueCode = true
+                        }
+                    )
+                }
             }
         }
     }
@@ -151,7 +166,8 @@ class MainActivity : ComponentActivity() {
 fun TvHomeScreen(
     playerManager: com.reybel.ellentv.ui.player.PlayerManager,
     vm: HomeViewModel,
-    onDemandVm: OnDemandViewModel
+    onDemandVm: OnDemandViewModel,
+    prefsManager: com.reybel.ellentv.data.PreferencesManager
 ) {
     val ui by vm.ui.collectAsState()
     val context = LocalContext.current.applicationContext
@@ -252,7 +268,8 @@ fun TvHomeScreen(
 
         scope.launch {
             try {
-                val playInfo = repo.fetchPlayInfo(liveId)
+                val uniqueCode = prefsManager.getUniqueCode()
+                val playInfo = repo.fetchPlayInfo(liveId, uniqueCode)
                 streamUrl = playInfo.url
                 streamAlt1 = playInfo.alt1.orEmpty()
                 streamAlt2 = playInfo.alt2.orEmpty()
@@ -628,7 +645,8 @@ fun TvHomeScreen(
                 if (!chosenId.isNullOrBlank()) {
                     bootProgress = 0.92f
                     bootTitle = "Almost ready…"
-                    val playInfo = withContext(Dispatchers.IO) { repo.fetchPlayInfo(chosenId) }
+                    val uniqueCode = prefsManager.getUniqueCode()
+                    val playInfo = withContext(Dispatchers.IO) { repo.fetchPlayInfo(chosenId, uniqueCode) }
                     streamUrl = playInfo.url
                     streamAlt1 = playInfo.alt1.orEmpty()
                     streamAlt2 = playInfo.alt2.orEmpty()
@@ -827,7 +845,8 @@ fun TvHomeScreen(
                                 // Check for saved progress
                                 val savedProgress = playerManager.getSavedProgress(item.id)
 
-                                val url = onDemandVm.getMoviePlayUrl(item.id)
+                                val uniqueCode = prefsManager.getUniqueCode()
+                                val url = onDemandVm.getMoviePlayUrl(item.id, uniqueCode)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
 
@@ -859,7 +878,8 @@ fun TvHomeScreen(
                                 // Check for saved progress
                                 val savedProgress = playerManager.getSavedProgress(contentId)
 
-                                val url = onDemandVm.getSeriesEpisodePlayUrl(providerId, episodeId, format)
+                                val uniqueCode = prefsManager.getUniqueCode()
+                                val url = onDemandVm.getSeriesEpisodePlayUrl(providerId, episodeId, format, uniqueCode)
                                 vodActiveFullscreen = true
                                 playerManager.setVodUrl(url)
 

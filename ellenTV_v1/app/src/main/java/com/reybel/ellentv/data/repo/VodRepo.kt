@@ -151,12 +151,14 @@ class VodRepo {
     suspend fun fetchSeriesEpisodePlayUrl(
         providerId: String,
         episodeId: Int,
-        format: String?
+        format: String?,
+        uniqueCode: String? = null
     ): String {
         return api.getSeriesEpisodePlay(
             providerId = providerId,
             episodeId = episodeId,
-            format = format
+            format = format,
+            uniqueCode = uniqueCode
         ).url
     }
 
@@ -171,8 +173,8 @@ class VodRepo {
      * Solución: Simplemente devolvemos la URL del backend y dejamos que
      * ExoPlayer siga el 302 redirect él mismo (ya lo hace bien con followRedirects=true)
      */
-    suspend fun fetchVodPlayUrl(vodId: String): String {
-        val response = api.getVodPlayUrl(vodId = vodId, format = null)
+    suspend fun fetchVodPlayUrl(vodId: String, uniqueCode: String? = null): String {
+        val response = api.getVodPlayUrl(vodId = vodId, format = null, uniqueCode = uniqueCode)
         val url = response.url
 
         Log.d("VOD_REPO", "VOD URL from backend: $url")
