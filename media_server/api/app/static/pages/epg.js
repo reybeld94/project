@@ -11,6 +11,23 @@ function formatWindow(start, end) {
   return `${formatTime(start)} - ${formatTime(end)}`;
 }
 
+function formatEpgOption(channel) {
+  const label = channel.display_name || channel.xmltv_id || "";
+  const id = channel.xmltv_id || "";
+  return label && id ? `${label} (${id})` : (label || id || "");
+}
+
+function resolveXmltvId(value, epgChannelLookup, optionMap) {
+  if (!value) return null;
+  const direct = optionMap.get(value);
+  if (direct) return direct;
+  if (epgChannelLookup.has(value)) return value;
+  const match = value.match(/\(([^)]+)\)\s*$/);
+  if (!match) return null;
+  const candidate = match[1].trim();
+  return epgChannelLookup.has(candidate) ? candidate : null;
+}
+
 export function EpgPage(appState) {
   let providerId = appState.epg?.providerId || "";
   let epgSourceId = appState.epg?.sourceId || "";
@@ -213,6 +230,7 @@ export function EpgPage(appState) {
 
     const epgChannelLookup = new Map(epgChannels.map(item => [item.xmltv_id, item.display_name || item.xmltv_id]));
     const epgSourceLookup = new Map(epgSources.map(source => [source.id, source.name]));
+    const epgOptionMap = new Map(epgChannels.map(ch => [formatEpgOption(ch), ch.xmltv_id]));
 
     items.forEach(item => {
       const row = el("div", {
@@ -240,12 +258,28 @@ export function EpgPage(appState) {
         ? (epgSourceLookup.get(item.epg_source_id) || "Fuente desconocida")
         : "Sin fuente";
 
-      const mappingSelect = el("select", {
+      const mappingListId = `epg-map-${item.live_id}`;
+      let currentLabel = item.epg_channel_id
+        ? formatEpgOption({
+          xmltv_id: item.epg_channel_id,
+          display_name: item.epg_channel_name || epgChannelLookup.get(item.epg_channel_id)
+        })
+        : "";
+      const mappingInput = el("input", {
         class:"w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-xs text-zinc-100",
+        list: mappingListId,
+        placeholder:"Buscar canal XMLTV…",
         disabled: !epgSourceId || !epgChannels.length,
+        value: currentLabel,
         onchange: async (e) => {
-          const xmltvId = e.target.value || null;
+          const rawValue = e.target.value.trim();
+          const xmltvId = resolveXmltvId(rawValue, epgChannelLookup, epgOptionMap);
           if (!epgSourceId) return;
+          if (rawValue && !xmltvId) {
+            status.textContent = "Selecciona un canal XMLTV válido.";
+            e.target.value = currentLabel;
+            return;
+          }
           status.textContent = "Guardando mapeo XMLTV…";
           try {
             await api.live.patch(item.live_id, {
@@ -255,25 +289,30 @@ export function EpgPage(appState) {
             item.epg_source_id = xmltvId ? epgSourceId : null;
             item.epg_channel_id = xmltvId;
             item.epg_channel_name = xmltvId ? (epgChannelLookup.get(xmltvId) || xmltvId) : null;
+            currentLabel = xmltvId
+              ? formatEpgOption({ xmltv_id: xmltvId, display_name: item.epg_channel_name })
+              : "";
+            e.target.value = currentLabel;
             status.textContent = "✅ Mapeo guardado.";
             reload();
           } catch (err) {
             status.textContent = `❌ ${err.message}`;
           }
         }
-      }, [
+      });
+      const mappingList = el("datalist", { id: mappingListId }, [
         el("option", { value:"" }, "Sin asignar"),
-        ...epgChannels.map(ch => el("option", { value:ch.xmltv_id }, ch.display_name || ch.xmltv_id))
+        ...epgChannels.map(ch => el("option", {
+          value: formatEpgOption(ch),
+          label: ch.display_name || ch.xmltv_id
+        }))
       ]);
-
-      if (item.epg_channel_id && item.epg_source_id === epgSourceId) {
-        mappingSelect.value = item.epg_channel_id;
-      }
 
       const mappingCell = el("div", { class:"px-3 py-3 border-r border-white/10" }, [
         el("div", { class:"text-xs text-zinc-400 mb-2" }, sourceLabel),
         el("div", { class:"text-xs text-zinc-200 mb-2 truncate" }, mappingLabel),
-        mappingSelect,
+        mappingInput,
+        mappingList,
       ]);
 
       const timelineBase = el("div", {
