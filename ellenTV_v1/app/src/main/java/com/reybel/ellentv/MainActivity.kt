@@ -59,6 +59,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -909,8 +912,11 @@ fun TvHomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.background),
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(R.drawable.background)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
