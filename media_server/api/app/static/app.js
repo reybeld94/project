@@ -3,12 +3,14 @@ import { parseRoute, go } from "./router.js";
 import { LivePage } from "./pages/live.js";
 import { MoviesPage, MovieDetailPage } from "./pages/movies.js";
 import { SeriesPage, SeriesDetailPage } from "./pages/series.js";
+import { EpgPage } from "./pages/epg.js";
 import { SettingsPage } from "./pages/settings.js";
 
 const appState = {
   live: { q:"", limit:50, offset:0, providerId:null, approved:null },
   movies: { q:"", limit:60, offset:0 },
   series: { q:"", limit:60, offset:0 },
+  epg: { q:"", limit:80, offset:0, hours:8, approvedOnly:true, providerId:null },
 
   moviesCache: new Map(),
   seriesCache: new Map(),
@@ -41,6 +43,7 @@ function render() {
       navItem("Live TV", "/live", r.root === "live"),
       navItem("Movies", "/movies", r.root === "movies"),
       navItem("Series", "/series", r.root === "series"),
+      navItem("EPG", "/epg", r.root === "epg"),
       navItem("Settings", "/settings/providers", r.root === "settings"),
     ]),
     el("div", { class:"mt-auto text-xs text-zinc-600 px-2" }, "v0 UI shell"),
@@ -53,6 +56,7 @@ function render() {
   if (r.root === "live") page = LivePage(appState);
   else if (r.root === "movies") page = r.sub ? MovieDetailPage(appState, r.sub) : MoviesPage(appState);
   else if (r.root === "series") page = r.sub ? SeriesDetailPage(appState, r.sub) : SeriesPage(appState);
+  else if (r.root === "epg") page = EpgPage(appState);
   else if (r.root === "settings") page = SettingsPage(appState, r.sub);
   else page = LivePage(appState);
 
