@@ -88,6 +88,7 @@ def sync_epg_for_source_id(
         raise HTTPException(status_code=404, detail="EPG source not found")
 
     url = src.xmltv_url
+    provider_for_legacy = db.get(Provider, auto_map_provider_id) if auto_map_provider_id else None
 
     try:
         path = download_xmltv_to_file(url)
@@ -143,9 +144,12 @@ def sync_epg_for_source_id(
                             existing.icon_url = icon_url
                             existing.updated_at = datetime.utcnow()
                             up_channels += 1
+                        if provider_for_legacy and existing.provider_id is None:
+                            existing.provider_id = provider_for_legacy.id
                     else:
                         ch = EpgChannel(
                             epg_source_id=src.id,
+                            provider_id=provider_for_legacy.id if provider_for_legacy else None,
                             xmltv_id=xml_id,
                             display_name=display,
                             icon_url=icon_url,
@@ -197,6 +201,7 @@ def sync_epg_for_source_id(
                     if not ch:
                         ch = EpgChannel(
                             epg_source_id=src.id,
+                            provider_id=provider_for_legacy.id if provider_for_legacy else None,
                             xmltv_id=xml_id,
                             display_name=xml_id,
                             icon_url=None,
@@ -215,6 +220,7 @@ def sync_epg_for_source_id(
                     # ✅ Como ya purgamos, solo insertamos. Nada de “mezclas”.
                     db.add(EpgProgram(
                         epg_source_id=src.id,
+                        provider_id=provider_for_legacy.id if provider_for_legacy else None,
                         channel_id=ch.id,
                         start_time=start,
                         end_time=stop,
@@ -241,7 +247,7 @@ def sync_epg_for_source_id(
         # Si se especifica provider_id, ejecutar automapeo después de sincronizar
         if auto_map_provider_id:
             try:
-                p = db.get(Provider, auto_map_provider_id)
+                p = provider_for_legacy
                 if p:
                     log.info(f"Ejecutando automapeo para provider {auto_map_provider_id} (approved_only={auto_map_approved_only})")
 
