@@ -752,29 +752,31 @@ fun TvHomeScreen(
                         .fillMaxSize()
                         .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 0.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        PreviewSection(
-                            player = player,
-                            attachPlayer = !isFullscreen,
-                            modifier = Modifier
-                                .fillMaxWidth(0.35f)
-                                .height(190.dp)
-                        )
+                    if (!isFullscreen) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            PreviewSection(
+                                player = player,
+                                attachPlayer = true,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.35f)
+                                    .height(190.dp)
+                            )
 
-                        InfoPanel(
-                            browseLiveId = browseLiveId,
-                            selectedId = selectedId,
-                            browseProgram = browseProgram,
-                            epgGrid = epgGrid,
-                            channels = channels,
-                            now = now
-                        )
+                            InfoPanel(
+                                browseLiveId = browseLiveId,
+                                selectedId = selectedId,
+                                browseProgram = browseProgram,
+                                epgGrid = epgGrid,
+                                channels = channels,
+                                now = now
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
                     }
-
-                    Spacer(Modifier.height(8.dp))
 
                         EpgSection(
                         error = error,
