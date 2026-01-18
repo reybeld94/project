@@ -674,7 +674,7 @@ fun ChannelCellModern(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.1f))
+                        .background(Color(0xFF8C8C8C))
                 ) {
                     OptimizedAsyncImage(
                         url = channelData.logoUrl,
@@ -689,7 +689,7 @@ fun ChannelCellModern(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
+                        .background(Color(0xFF8C8C8C))
                 )
             }
 
