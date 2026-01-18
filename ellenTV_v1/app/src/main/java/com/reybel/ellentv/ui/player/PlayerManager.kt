@@ -175,7 +175,7 @@ class PlayerManager(context: Context) {
             BufferLevel.LOW -> DefaultLoadControl.Builder()
                 // Para conexiones muy rápidas o streams de baja calidad
                 .setBufferDurationsMs(
-                    2000,   // minBufferMs: 2s
+                    2500,   // minBufferMs: 2.5s (debe ser > bufferForPlaybackAfterRebufferMs)
                     10000,  // maxBufferMs: 10s
                     1500,   // bufferForPlaybackMs: 1.5s
                     2000    // bufferForPlaybackAfterRebufferMs: 2s
@@ -193,7 +193,7 @@ class PlayerManager(context: Context) {
                 // 🔧 OPTIMIZADO para FireTV con servidores en modo ráfaga
                 // Balance perfecto: suficiente buffer para ráfagas, sin causar GC
                 .setBufferDurationsMs(
-                    3000,   // minBufferMs: 3s - arranque rápido
+                    3500,   // minBufferMs: 3.5s - arranque rápido (debe ser > bufferForPlaybackAfterRebufferMs)
                     20000,  // maxBufferMs: 20s - tolera pausas del servidor sin GC
                     2500,   // bufferForPlaybackMs: 2.5s
                     3000    // bufferForPlaybackAfterRebufferMs: 3s
@@ -210,17 +210,17 @@ class PlayerManager(context: Context) {
                 .build()
 
             BufferLevel.NORMAL -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5000, 30000, 2000, 5000)
+                .setBufferDurationsMs(5500, 30000, 2000, 5000)
                 .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
 
             BufferLevel.HIGH -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(25000, 60000, 3000, 15000)
+                .setBufferDurationsMs(25500, 60000, 3000, 15000)
                 .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
 
             BufferLevel.MAXIMUM -> DefaultLoadControl.Builder()
-                .setBufferDurationsMs(30000, 90000, 3000, 20000)
+                .setBufferDurationsMs(30500, 90000, 3000, 20000)
                 .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
         }
