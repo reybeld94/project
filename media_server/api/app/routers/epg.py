@@ -724,7 +724,10 @@ def epg_grid(
             "live_id": str(s.id),
             "name": s.name,
             "logo": s.custom_logo_url,
+            "channel_number": s.channel_number,
             "epg_source_id": str(s.epg_source_id) if s.epg_source_id else None,
+            "epg_channel_id": xml_id or None,
+            "epg_channel_name": ch.display_name if ch else None,
             "programs": programs,
         })
 

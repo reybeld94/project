@@ -98,6 +98,10 @@ export const api = {
     syncSource: (sourceId, hours=36) => req(`/epg/sync?source_id=${encodeURIComponent(sourceId)}&hours=${hours}`, { method:"POST" }),
     channels: (sourceId, { q="", limit=200, offset=0 }={}) =>
       req(`/epg/channels?source_id=${encodeURIComponent(sourceId)}&q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`),
+    grid: (providerId, { hours=8, limit=80, offset=0, approvedOnly=true }={}) => {
+      const ap = approvedOnly ? "1" : "0";
+      return req(`/epg/grid?provider_id=${encodeURIComponent(providerId)}&hours=${hours}&limit_channels=${limit}&offset_channels=${offset}&approved_only=${ap}`);
+    },
   },
 
   tmdb: {
