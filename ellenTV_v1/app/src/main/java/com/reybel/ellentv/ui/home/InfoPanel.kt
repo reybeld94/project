@@ -92,7 +92,7 @@ fun InfoPanel(
                 if (!headerLogo.isNullOrBlank()) {
                     OptimizedAsyncImage(
                         url = headerLogo,
-                        modifier = Modifier.size(34.dp),
+                        modifier = Modifier.size(44.dp),
                         contentScale = ContentScale.Fit
                     )
                     Spacer(Modifier.width(10.dp))
