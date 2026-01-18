@@ -461,101 +461,114 @@ fun EpgGridView(
     val headerHeight = 36.dp
     val rowHeight = 64.dp
 
-    // Header timeline
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = Color.Black.copy(alpha = 0.30f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(headerHeight)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "CHANNELS",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.7f),
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.width(channelColWidth)
-            )
+    val timelineOffset = channelColWidth + 12.dp
 
-            Spacer(Modifier.width(12.dp))
-
-            Box(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header timeline
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color.Black.copy(alpha = 0.30f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                 modifier = Modifier
-                    .width(visibleTimeWindow.totalWidth)
-                    .fillMaxHeight()
+                    .fillMaxWidth()
+                    .height(headerHeight)
             ) {
-                LazyRow(
-                    state = horizontalListState,
-                    modifier = Modifier.fillMaxHeight(),
+                Row(
+                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val startZ = visibleTimeWindow.start.atZone(zone)
-                    val halfHourWidth = hourWidth / 2
-                    val steps = (visibleTimeWindow.durationMinutes / 30).toInt()
+                    Text(
+                        "CHANNELS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier
+                            .width(channelColWidth)
+                            .padding(start = 12.dp)
+                    )
 
-                    items(count = steps + 1, key = { it }) { i ->
-                        val t = startZ.plusMinutes((i * 30).toLong())
-                        Box(
-                            modifier = Modifier.width(halfHourWidth),
-                            contentAlignment = Alignment.CenterStart
+                    Spacer(Modifier.width(12.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .width(visibleTimeWindow.totalWidth)
+                            .fillMaxHeight()
+                    ) {
+                        LazyRow(
+                            state = horizontalListState,
+                            modifier = Modifier.fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (i % 2 == 0) {
-                                Text(
-                                    t.format(fmt),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White.copy(alpha = 0.9f)
-                                )
+                            val startZ = visibleTimeWindow.start.atZone(zone)
+                            val halfHourWidth = hourWidth / 2
+                            val steps = (visibleTimeWindow.durationMinutes / 30).toInt()
+
+                            items(count = steps + 1, key = { it }) { i ->
+                                val t = startZ.plusMinutes((i * 30).toLong())
+                                Box(
+                                    modifier = Modifier.width(halfHourWidth),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (i % 2 == 0) {
+                                        Text(
+                                            t.format(fmt),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White.copy(alpha = 0.9f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .drawNowLine(now, visibleTimeWindow.start, visibleTimeWindow.end)
-                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            // OPTIMIZACIONES CRÍTICAS PARA SCROLLING FLUIDO
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 40.dp),
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = true
+            ) {
+                items(
+                    items = rowsToRender,
+                    key = { it.liveId },
+                    contentType = { "epg_row" }
+                ) { rowData ->
+                    val isSelected = rowData.liveId == selectedLiveId
+                    EpgRow(
+                        rowData = rowData,
+                        isSelected = isSelected,
+                        timeWindow = visibleTimeWindow,
+                        horizontalState = horizontalListState,
+                        channelColWidth = channelColWidth,
+                        rowHeight = rowHeight,
+                        hourWidth = hourWidth,
+                        focusRequester = frFor(rowData.liveId),
+                        onSelectLive = onSelectLive,
+                        onHover = onHover,
+                        onChannelColumnFocusChanged = onChannelColumnFocusChanged // 🔧 NUEVO
+                    )
+                }
             }
         }
-    }
 
-    Spacer(Modifier.height(6.dp))
-
-    // OPTIMIZACIONES CRÍTICAS PARA SCROLLING FLUIDO
-    LazyColumn(
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 40.dp),
-        modifier = Modifier.fillMaxSize(),
-        userScrollEnabled = true
-    ) {
-        items(
-            items = rowsToRender,
-            key = { it.liveId },
-            contentType = { "epg_row" }
-        ) { rowData ->
-            val isSelected = rowData.liveId == selectedLiveId
-            EpgRow(
-                rowData = rowData,
-                isSelected = isSelected,
-                timeWindow = visibleTimeWindow,
-                now = now,
-                horizontalState = horizontalListState,
-                channelColWidth = channelColWidth,
-                rowHeight = rowHeight,
-                hourWidth = hourWidth,
-                focusRequester = frFor(rowData.liveId),
-                onSelectLive = onSelectLive,
-                onHover = onHover,
-                onChannelColumnFocusChanged = onChannelColumnFocusChanged // 🔧 NUEVO
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = timelineOffset)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(visibleTimeWindow.totalWidth)
+                    .fillMaxHeight()
+                    .drawNowLine(now, visibleTimeWindow.start, visibleTimeWindow.end)
             )
         }
     }
@@ -566,7 +579,6 @@ fun EpgRow(
     rowData: EpgRowData,
     isSelected: Boolean,
     timeWindow: TimeWindow,
-    now: Instant,
     horizontalState: LazyListState,
     channelColWidth: Dp,
     rowHeight: Dp,
@@ -617,11 +629,6 @@ fun EpgRow(
                 onClick = { onSelectLive(rowData.liveId) }
             )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawNowLine(now, timeWindow.start, timeWindow.end)
-            )
         }
     }
 }

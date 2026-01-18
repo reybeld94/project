@@ -4,6 +4,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.Dp
 import com.reybel.ellentv.data.api.ApiClient
 import com.reybel.ellentv.data.api.EpgProgram
@@ -63,11 +64,33 @@ fun Modifier.drawNowLine(
 
     if (frac in 0f..1f) {
         val x = size.width * frac
+        val coreColor = Color(0xFFFF3D5A)
+        val glowColor = Color(0xFFFF8A80)
+        val topDotY = 10f
+
         drawLine(
-            color = Color(0xFFFF1744).copy(alpha = 0.7f),
+            color = glowColor.copy(alpha = 0.35f),
             start = Offset(x, 0f),
             end = Offset(x, size.height),
-            strokeWidth = 3f
+            strokeWidth = 10f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = coreColor.copy(alpha = 0.9f),
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = 4f,
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = glowColor.copy(alpha = 0.7f),
+            radius = 7f,
+            center = Offset(x, topDotY)
+        )
+        drawCircle(
+            color = coreColor,
+            radius = 4.5f,
+            center = Offset(x, topDotY)
         )
     }
 }
