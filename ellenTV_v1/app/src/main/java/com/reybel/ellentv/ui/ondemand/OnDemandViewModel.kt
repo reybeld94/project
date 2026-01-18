@@ -284,12 +284,12 @@ class OnDemandViewModel(
         }
     }
 
-    suspend fun getMoviePlayUrl(vodId: String): String {
-        return repo.fetchVodPlayUrl(vodId)
+    suspend fun getMoviePlayUrl(vodId: String, uniqueCode: String? = null): String {
+        return repo.fetchVodPlayUrl(vodId, uniqueCode)
     }
 
-    suspend fun getSeriesEpisodePlayUrl(providerId: String, episodeId: Int, format: String?): String {
-        return repo.fetchSeriesEpisodePlayUrl(providerId, episodeId, format)
+    suspend fun getSeriesEpisodePlayUrl(providerId: String, episodeId: Int, format: String?, uniqueCode: String? = null): String {
+        return repo.fetchSeriesEpisodePlayUrl(providerId, episodeId, format, uniqueCode)
     }
 
     private fun loadFirstPage(collectionId: String) {

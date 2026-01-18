@@ -39,7 +39,7 @@ export function ProvidersTab(appState) {
                 p.is_active ? badge("ACTIVE","green") : badge("INACTIVE","red"),
               ]),
               el("div", { class:"text-xs text-zinc-500 mt-1" }, p.base_url),
-              el("div", { class:"text-xs text-zinc-500" }, `user: ${p.username}`),
+              el("div", { class:"text-xs text-zinc-400 mt-1" }, "→ Manage users in Users tab"),
             ]),
             el("div", { class:"flex flex-col items-end gap-2" }, [
               el("div", { class:"flex items-center gap-2" }, [
@@ -106,18 +106,17 @@ export function ProvidersTab(appState) {
 
   const form = el("div", { class:"hz-glass rounded-2xl p-5" }, [
     el("div", { class:"text-sm text-zinc-200 font-medium mb-3" }, "Add Provider"),
+    el("div", { class:"text-xs text-zinc-400 mb-3" }, "Only Base URL is required. Add users with credentials in the Users tab."),
     el("div", { class:"grid grid-cols-1 md:grid-cols-2 gap-3" }, [
-      input({ placeholder:"Name", onInput:(v)=> name=v }),
-      input({ placeholder:"Base URL (https://...)", onInput:(v)=> base_url=v }),
-      input({ placeholder:"Username", onInput:(v)=> username=v }),
-      input({ placeholder:"Password", onInput:(v)=> password=v }),
+      input({ placeholder:"Name (required)", onInput:(v)=> name=v }),
+      input({ placeholder:"Base URL (required) https://...", onInput:(v)=> base_url=v }),
     ]),
     el("div", { class:"mt-4 flex items-center justify-between gap-3" }, [
-      el("div", { class:"text-xs text-zinc-500" }, "En el siguiente paso: activar/desactivar provider desde aquí + delete + edit."),
+      el("div", { class:"text-xs text-zinc-500" }, "After creating, go to Users tab to add Xtream credentials."),
       button("Create", { tone:"blue", onClick: async ()=>{
         status.textContent = "Creando…";
         try {
-          await api.providers.create({ name, base_url, username, password });
+          await api.providers.create({ name, base_url, username: "", password: "" });
           name=base_url=username=password="";
           await load();
         } catch(e) {

@@ -20,12 +20,12 @@ class ChannelRepo {
         return api.getLive(providerId = providerId, approved = true, activeOnly = true, limit = 100, offset = 0).items
     }
 
-    suspend fun fetchPlayInfo(liveId: String): PlayResponse {
-        return api.getPlayUrl(liveId = liveId, format = "m3u8")
+    suspend fun fetchPlayInfo(liveId: String, uniqueCode: String? = null): PlayResponse {
+        return api.getPlayUrl(liveId = liveId, format = "m3u8", uniqueCode = uniqueCode)
     }
 
-    suspend fun fetchPlayUrl(liveId: String): String {
-        return fetchPlayInfo(liveId).url
+    suspend fun fetchPlayUrl(liveId: String, uniqueCode: String? = null): String {
+        return fetchPlayInfo(liveId, uniqueCode).url
     }
     suspend fun fetchEpgGrid(
         providerId: String,
