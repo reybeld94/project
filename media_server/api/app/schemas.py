@@ -7,8 +7,8 @@ from typing import Optional
 class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     base_url: HttpUrl
-    username: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=1, max_length=200)
+    username: str | None = None
+    password: str | None = None
 
 class ProviderOut(BaseModel):
     id: UUID
@@ -228,3 +228,33 @@ class CollectionPreviewOut(BaseModel):
     filters: dict | None = None
     page: int
     payload: dict
+
+
+# Provider Users schemas
+class ProviderUserCreate(BaseModel):
+    provider_id: UUID
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+    alias: str = Field(min_length=1, max_length=120)
+    is_enabled: bool = True
+
+
+class ProviderUserUpdate(BaseModel):
+    username: str | None = None
+    password: str | None = None
+    alias: str | None = None
+    is_enabled: bool | None = None
+
+
+class ProviderUserOut(BaseModel):
+    id: UUID
+    provider_id: UUID
+    username: str
+    unique_code: str
+    alias: str
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

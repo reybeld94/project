@@ -1,6 +1,7 @@
 import { el } from "../ui.js";
 import { go } from "../router.js";
 import { ProvidersTab } from "./settings/providers.js";
+import { UsersTab } from "./settings/users.js";
 import { EpgTab } from "./settings/epg.js";
 import { DocsTab } from "./settings/docs.js";
 import { TmdbTab } from "./settings/tmdb.js";
@@ -8,6 +9,7 @@ import { CollectionsTab } from "./settings/collections.js";
 
 const TABS = [
   { key:"providers", label:"Providers" },
+  { key:"users", label:"Users" },
   { key:"epg", label:"EPG" },
   { key:"docs", label:"API" },
   { key:"tmdb", label:"TMDB" },
@@ -30,6 +32,7 @@ export function SettingsPage(appState, subRoute) {
 
   let content = null;
   if (current === "providers") content = ProvidersTab(appState);
+  else if (current === "users") content = UsersTab(appState);
   else if (current === "epg") content = EpgTab(appState);
   else if (current === "docs") content = DocsTab(appState);
   else if (current === "tmdb") content = TmdbTab(appState);
@@ -39,7 +42,7 @@ export function SettingsPage(appState, subRoute) {
   return el("div", { class:"h-full flex flex-col" }, [
     el("div", { class:"px-6 pt-6" }, [
       el("h1", { class:"text-2xl font-semibold" }, "Settings"),
-      el("div", { class:"text-sm text-zinc-400 mt-1" }, "Providers, EPG, documentación de API, y estado TMDB."),
+      el("div", { class:"text-sm text-zinc-400 mt-1" }, "Providers, Users, EPG, API documentation, and TMDB status."),
       el("div", { class:"mt-4" }, tabBar),
     ]),
     el("div", { class:"px-6 pb-6 pt-5 flex-1 min-h-0" }, content),
