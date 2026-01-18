@@ -1,17 +1,72 @@
 import uuid
+import random
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_
 
 from app.deps import get_db
-from app.models import Provider, Category, VodStream
+from app.models import Provider, Category, VodStream, ProviderUser
 from app.schemas import VodStreamUpdate
 from app.xtream_client import xtream_get
 
 router = APIRouter(prefix="/vod", tags=["vod"])
 
 MAX_LIMIT = 5000
+
+
+def _get_credentials(db: Session, provider: Provider, unique_code: str | None = None) -> tuple[str, str]:
+    """
+    Get username and password for streaming URLs.
+
+    Priority:
+    1. If unique_code provided, use those credentials (must be enabled)
+    2. If provider has users, pick a random enabled user
+    3. Fall back to provider's own credentials (legacy)
+
+    Returns:
+        tuple[str, str]: (username, password)
+
+    Raises:
+        HTTPException: If no valid credentials found
+    """
+    # If unique_code provided, use that user
+    if unique_code:
+        user = db.execute(
+            select(ProviderUser).where(
+                ProviderUser.unique_code == unique_code,
+                ProviderUser.provider_id == provider.id,
+            )
+        ).scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found for this code")
+
+        if not user.is_enabled:
+            raise HTTPException(status_code=403, detail="User is disabled")
+
+        return user.username, user.password
+
+    # Try to get a random enabled user from this provider
+    users = db.execute(
+        select(ProviderUser).where(
+            ProviderUser.provider_id == provider.id,
+            ProviderUser.is_enabled == True,
+        )
+    ).scalars().all()
+
+    if users:
+        user = random.choice(users)
+        return user.username, user.password
+
+    # Fall back to provider credentials (legacy)
+    if provider.username and provider.password:
+        return provider.username, provider.password
+
+    raise HTTPException(
+        status_code=400,
+        detail="No credentials available. Please add users to this provider."
+    )
 
 
 def _get_vod_by_identifier(db: Session, vod_id: str) -> VodStream | None:
@@ -213,6 +268,7 @@ def list_vod_all(
 def vod_play_url(
         vod_id: str,
         format: str | None = None,
+        unique_code: str | None = None,  # User's unique code from APK
         db: Session = Depends(get_db),
         response: Response = None,
 ):
@@ -237,8 +293,11 @@ def vod_play_url(
     # Usar la extensión guardada o mp4 como fallback
     ext = (format or v.container_extension or "mp4").lower().strip()
 
+    # Get credentials (either from unique_code or random user)
+    username, password = _get_credentials(db, p, unique_code)
+
     # URL original de Xtream - ExoPlayer seguirá el 302 por sí mismo
-    url = f"{p.base_url.rstrip('/')}/movie/{p.username}/{p.password}/{v.provider_stream_id}.{ext}"
+    url = f"{p.base_url.rstrip('/')}/movie/{username}/{password}/{v.provider_stream_id}.{ext}"
 
     # Evita caches
     if response is not None:

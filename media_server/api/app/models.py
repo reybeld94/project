@@ -19,11 +19,34 @@ class Provider(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    username: Mapped[str] = mapped_column(String(120), nullable=False)
-    password: Mapped[str] = mapped_column(String(200), nullable=False)  # MVP: plaintext (luego ciframos)
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    password: Mapped[str | None] = mapped_column(String(200), nullable=True)  # MVP: plaintext (luego ciframos)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class ProviderUser(Base):
+    __tablename__ = "provider_users"
+    __table_args__ = (
+        UniqueConstraint("unique_code", name="uq_provider_users_unique_code"),
+        UniqueConstraint("provider_id", "username", name="uq_provider_users_provider_username"),
+        Index("ix_provider_users_unique_code", "unique_code"),
+        Index("ix_provider_users_provider_id", "provider_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="CASCADE"), nullable=False)
+    provider = relationship("Provider", lazy="joined")
+
+    username: Mapped[str] = mapped_column(String(120), nullable=False)
+    password: Mapped[str] = mapped_column(String(200), nullable=False)  # Xtream credentials
+    unique_code: Mapped[str] = mapped_column(String(6), nullable=False)  # 6-character unique code
+    alias: Mapped[str] = mapped_column(String(120), nullable=False)  # Friendly name for identification
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
 class Account(Base):

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_
 from app.schemas import LiveStreamUpdate
 from app.deps import get_db
-from app.models import Provider, Category, LiveStream
+from app.models import Provider, Category, LiveStream, ProviderUser
 from app.vlc import launch_vlc
 from sqlalchemy.exc import IntegrityError
 import os
@@ -14,6 +14,7 @@ from fastapi import UploadFile, File
 from urllib.parse import urlparse
 import re
 from sqlalchemy import select
+import random
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -26,6 +27,60 @@ _ALLOWED = {
     "image/webp": ".webp",
     "image/svg+xml": ".svg",
 }
+
+
+def _get_credentials(db: Session, provider: Provider, unique_code: str | None = None) -> tuple[str, str]:
+    """
+    Get username and password for streaming URLs.
+
+    Priority:
+    1. If unique_code provided, use those credentials (must be enabled)
+    2. If provider has users, pick a random enabled user
+    3. Fall back to provider's own credentials (legacy)
+
+    Returns:
+        tuple[str, str]: (username, password)
+
+    Raises:
+        HTTPException: If no valid credentials found
+    """
+    # If unique_code provided, use that user
+    if unique_code:
+        user = db.execute(
+            select(ProviderUser).where(
+                ProviderUser.unique_code == unique_code,
+                ProviderUser.provider_id == provider.id,
+            )
+        ).scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found for this code")
+
+        if not user.is_enabled:
+            raise HTTPException(status_code=403, detail="User is disabled")
+
+        return user.username, user.password
+
+    # Try to get a random enabled user from this provider
+    users = db.execute(
+        select(ProviderUser).where(
+            ProviderUser.provider_id == provider.id,
+            ProviderUser.is_enabled == True,
+        )
+    ).scalars().all()
+
+    if users:
+        user = random.choice(users)
+        return user.username, user.password
+
+    # Fall back to provider credentials (legacy)
+    if provider.username and provider.password:
+        return provider.username, provider.password
+
+    raise HTTPException(
+        status_code=400,
+        detail="No credentials available. Please add users to this provider."
+    )
 
 
 @router.get("")
@@ -124,6 +179,7 @@ def get_live_play_url(
     alt2: bool = False,
     alt3: bool = False,
     open_vlc: bool = False,
+    unique_code: str | None = None,  # User's unique code from APK
     db: Session = Depends(get_db),
 ):
     """
@@ -182,7 +238,10 @@ def get_live_play_url(
     if fmt not in ("m3u8", "ts"):
         raise HTTPException(status_code=400, detail="format must be m3u8 or ts")
 
-    url = f"{p.base_url.rstrip('/')}/live/{p.username}/{p.password}/{target.provider_stream_id}.{fmt}"
+    # Get credentials (either from unique_code or random user)
+    username, password = _get_credentials(db, p, unique_code)
+
+    url = f"{p.base_url.rstrip('/')}/live/{username}/{password}/{target.provider_stream_id}.{fmt}"
 
     out = {"id": str(target.id), "name": target.name, "url": url}
     if open_vlc:
@@ -198,9 +257,11 @@ def get_live_play_url(
             alt_provider = db.get(Provider, alt_stream.provider_id)
             if not alt_provider:
                 continue
+            # Use same credentials for alternative streams
+            alt_username, alt_password = _get_credentials(db, alt_provider, unique_code)
             alt_url = (
                 f"{alt_provider.base_url.rstrip('/')}/live/"
-                f"{alt_provider.username}/{alt_provider.password}/"
+                f"{alt_username}/{alt_password}/"
                 f"{alt_stream.provider_stream_id}.{fmt}"
             )
             out[f"alt{n}"] = alt_url

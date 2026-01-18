@@ -22,7 +22,8 @@ interface ApiService {
     @GET("live/{live_id}/play")
     suspend fun getPlayUrl(
         @Path("live_id") liveId: String,
-        @Query("format") format: String = "m3u8"
+        @Query("format") format: String = "m3u8",
+        @Query("unique_code") uniqueCode: String? = null
     ): PlayResponse
 
     @GET("epg/grid")
@@ -77,7 +78,8 @@ interface ApiService {
     @GET("vod/{vod_id}/play")
     suspend fun getVodPlayUrl(
         @Path("vod_id") vodId: String,
-        @Query("format") format: String? = null
+        @Query("format") format: String? = null,
+        @Query("unique_code") uniqueCode: String? = null
     ): PlayResponse
 
     @GET("vod/all")
@@ -116,7 +118,8 @@ interface ApiService {
     suspend fun getSeriesEpisodePlay(
         @Query("provider_id") providerId: String,
         @Query("episode_id") episodeId: Int,
-        @Query("format") format: String?
+        @Query("format") format: String?,
+        @Query("unique_code") uniqueCode: String? = null
     ): PlayResponse
 
     // ---------- COLLECTIONS ----------
