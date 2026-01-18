@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Provider, ProviderAutoSyncConfig
-from app.routers.providers import sync_all, sync_categories
 
 
 log = logging.getLogger("mini_media_server")
@@ -36,6 +35,9 @@ def update_provider_auto_sync(db: Session, provider_id, interval_minutes: int) -
 
 
 def run_provider_auto_sync(db: Session) -> dict:
+    # Import here to avoid circular import
+    from app.routers.providers import sync_all, sync_categories
+
     providers = db.execute(
         select(Provider).where(Provider.is_active == True)
     ).scalars().all()
