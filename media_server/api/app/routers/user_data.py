@@ -1,6 +1,6 @@
 """Router for managing user data (playback progress, watched items, favorites, my list)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, delete
@@ -82,7 +82,7 @@ def save_playback_progress(
             existing.season_number = payload.season_number
         if payload.episode_number is not None:
             existing.episode_number = payload.episode_number
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = datetime.now(timezone.utc)
 
         db.commit()
         db.refresh(existing)
@@ -100,8 +100,8 @@ def save_playback_progress(
             backdrop_url=payload.backdrop_url,
             season_number=payload.season_number,
             episode_number=payload.episode_number,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
         try:
@@ -203,7 +203,7 @@ def mark_as_watched(
 
     if existing:
         # Update watched_at timestamp
-        existing.watched_at = datetime.utcnow()
+        existing.watched_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(existing)
         return existing
@@ -213,8 +213,8 @@ def mark_as_watched(
         provider_user_id=user.id,
         content_type=payload.content_type,
         content_id=payload.content_id,
-        watched_at=datetime.utcnow(),
-        created_at=datetime.utcnow(),
+        watched_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
     )
 
     try:
@@ -326,7 +326,7 @@ def add_to_favorites(
         provider_user_id=user.id,
         content_type=payload.content_type,
         content_id=payload.content_id,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
 
     try:
@@ -436,7 +436,7 @@ def add_to_my_list(
         provider_user_id=user.id,
         content_type=payload.content_type,
         content_id=payload.content_id,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
 
     try:

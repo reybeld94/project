@@ -1,6 +1,6 @@
 """Router for managing provider users (Xtream Codes credentials)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -50,8 +50,8 @@ def create_provider_user(payload: ProviderUserCreate, db: Session = Depends(get_
         unique_code=unique_code,
         alias=payload.alias,
         is_enabled=payload.is_enabled,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
 
     try:
@@ -139,7 +139,7 @@ def update_provider_user(
         changed = True
 
     if changed:
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
         try:
             db.commit()
             db.refresh(user)

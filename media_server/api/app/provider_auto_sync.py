@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from fastapi import HTTPException
@@ -28,7 +28,7 @@ def get_or_create_provider_auto_sync(db: Session, provider_id) -> ProviderAutoSy
 def update_provider_auto_sync(db: Session, provider_id, interval_minutes: int) -> ProviderAutoSyncConfig:
     cfg = get_or_create_provider_auto_sync(db, provider_id)
     cfg.interval_minutes = interval_minutes
-    cfg.updated_at = datetime.utcnow()
+    cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(cfg)
     return cfg
@@ -43,7 +43,7 @@ def run_provider_auto_sync(db: Session) -> dict:
     ).scalars().all()
 
     results = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for provider in providers:
         provider_id = str(provider.id)
         cfg = get_or_create_provider_auto_sync(db, provider.id)

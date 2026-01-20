@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
@@ -118,7 +118,7 @@ def update_provider(provider_id: str, payload: ProviderUpdate, db: Session = Dep
         changed = True
 
     if changed:
-        p.updated_at = datetime.utcnow()
+        p.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(p)
 
@@ -200,7 +200,7 @@ def _sync_one_category_set(db: Session, provider: Provider, cat_type: str, raw: 
             if existing.name != name or existing.is_active is False:
                 existing.name = name
                 existing.is_active = True
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
                 changed += 1
         else:
             db.add(Category(
@@ -209,7 +209,7 @@ def _sync_one_category_set(db: Session, provider: Provider, cat_type: str, raw: 
                 provider_category_id=ext_id,
                 name=name,
                 is_active=True,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             ))
             changed += 1
 
@@ -221,7 +221,7 @@ def _sync_one_category_set(db: Session, provider: Provider, cat_type: str, raw: 
     for c in existing_all:
         if c.provider_category_id not in seen and c.is_active:
             c.is_active = False
-            c.updated_at = datetime.utcnow()
+            c.updated_at = datetime.now(timezone.utc)
             changed += 1
 
     return changed
@@ -233,7 +233,7 @@ def _sync_vod_streams_for_provider(
     include_inactive_categories: bool = True,
     deactivate_missing: bool = False,
 ) -> dict:
-    started = datetime.utcnow()
+    started = datetime.now(timezone.utc)
     username, password = _get_sync_credentials(db, provider)
 
     try:
@@ -293,7 +293,7 @@ def _sync_vod_streams_for_provider(
 
         seen = set()
         changed = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         def _parse_tmdb_id(raw_value) -> int | None:
             try:
@@ -443,7 +443,7 @@ def _sync_vod_streams_for_provider(
             "changed": changed,
         })
 
-    finished = datetime.utcnow()
+    finished = datetime.now(timezone.utc)
     result["finished_at"] = finished.isoformat() + "Z"
     result["seconds"] = (finished - started).total_seconds()
     return result
@@ -454,7 +454,7 @@ def _sync_series_items_for_provider(
     provider: Provider,
     include_inactive_categories: bool = True,
 ) -> dict:
-    started = datetime.utcnow()
+    started = datetime.now(timezone.utc)
     username, password = _get_sync_credentials(db, provider)
 
     try:
@@ -512,7 +512,7 @@ def _sync_series_items_for_provider(
 
         seen = set()
         changed = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for item in raw:
             try:
@@ -582,7 +582,7 @@ def _sync_series_items_for_provider(
             "changed": changed,
         })
 
-    finished = datetime.utcnow()
+    finished = datetime.now(timezone.utc)
     result["finished_at"] = finished.isoformat() + "Z"
     result["seconds"] = (finished - started).total_seconds()
     return result
@@ -692,7 +692,7 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
             )
         ).scalar_one_or_none()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if existing:
             # update si cambió o si estaba inactive
@@ -732,7 +732,7 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
         )
     ).scalars().all()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for s in existing_in_cat:
         if s.provider_stream_id not in seen:
             s.is_active = False
@@ -761,7 +761,7 @@ def sync_all(
         raise HTTPException(status_code=404, detail="Provider not found")
 
     username, password = _get_sync_credentials(db, p)
-    started = datetime.utcnow()
+    started = datetime.now(timezone.utc)
 
     result = {
         "ok": True,
@@ -822,7 +822,7 @@ def sync_all(
                     )
                 ).scalar_one_or_none()
 
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
 
                 if existing:
                     if (
@@ -860,7 +860,7 @@ def sync_all(
                 )
             ).scalars().all()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             for s in existing_in_cat:
                 if s.provider_stream_id not in seen:
                     s.is_active = False
@@ -905,7 +905,7 @@ def sync_all(
             "details": series_result["details"],
         }
 
-    finished = datetime.utcnow()
+    finished = datetime.now(timezone.utc)
     result["finished_at"] = finished.isoformat() + "Z"
     result["seconds"] = (finished - started).total_seconds()
     return result
@@ -972,7 +972,7 @@ def sync_series_items(provider_id: str, category_ext_id: int, db: Session = Depe
 
     seen = set()
     changed = 0
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     for item in raw:
         # series_id es lo normal; algunos panels mandan "series_id" como string

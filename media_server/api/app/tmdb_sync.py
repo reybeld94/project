@@ -188,7 +188,7 @@ def _store_tmdb_details(db: Session, *, kind: str, details: dict) -> None:
     entity.video = details.get("video")
     entity.vote_average = details.get("vote_average")
     entity.vote_count = details.get("vote_count")
-    entity.updated_at = datetime.utcnow()
+    entity.updated_at = datetime.now(timezone.utc)
 
     db.flush()
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import random
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -207,7 +207,7 @@ def sync_series_seasons(series_id: str, db: Session = Depends(get_db)):
     seasons_raw = raw.get("seasons") or []
     episodes_raw = raw.get("episodes") or {}
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     seasons_synced = 0
     episodes_synced = 0
 

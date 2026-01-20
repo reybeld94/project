@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -54,7 +54,7 @@ def update_provider_auto_sync_config(
     cfg = get_or_create_provider_auto_sync(db, resolved_provider_id)
     if payload.interval_minutes is not None:
         cfg.interval_minutes = payload.interval_minutes
-        cfg.updated_at = datetime.utcnow()
+        cfg.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(cfg)
     return ProviderAutoSyncConfigOut(
