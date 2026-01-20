@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.reybel.ellentv.data.repo.PlaybackProgress
 import com.reybel.ellentv.data.repo.PlaybackProgressCache
+import com.reybel.ellentv.data.repo.UserDataRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +40,7 @@ class PlayerManager(context: Context) {
 
     // Progress tracking
     private val progressCache = PlaybackProgressCache(context)
+    private val userDataRepo = UserDataRepo(context)
     private var currentContentId: String? = null
     private var currentContentType: String? = null
     private var currentSeasonNumber: Int? = null
@@ -1006,15 +1008,47 @@ class PlayerManager(context: Context) {
             backdropUrl = currentBackdropUrl
         )
 
+        // Check if user completed watching (>= 95%)
+        val isCompleted = progress.progressPercent >= 95f
+
         // Only save if progress is meaningful (watched > 5s and < 95%)
-        if (progress.shouldResume || markCompleted) {
+        if (progress.shouldResume || markCompleted || isCompleted) {
             scope.launch(Dispatchers.IO) {
-                if (markCompleted) {
+                if (markCompleted || isCompleted) {
+                    // Clear local progress if completed
                     progressCache.clearProgress(contentId)
                     Log.d("ELLENTV_PROGRESS", "Cleared progress for $contentId (completed)")
+
+                    // Mark as watched on server if completed
+                    if (isCompleted) {
+                        userDataRepo.markAsWatched(contentType, contentId)
+                        Log.d("ELLENTV_PROGRESS", "Marked as watched on server: $contentId")
+                    }
+
+                    // Delete progress from server
+                    userDataRepo.deletePlaybackProgress(contentType, contentId)
+                    Log.d("ELLENTV_PROGRESS", "Deleted progress from server: $contentId")
                 } else {
+                    // Save locally
                     progressCache.saveProgress(progress)
-                    Log.d("ELLENTV_PROGRESS", "Saved progress: ${position}ms/${duration}ms (${progress.progressPercent.toInt()}%)")
+                    Log.d("ELLENTV_PROGRESS", "Saved progress locally: ${position}ms/${duration}ms (${progress.progressPercent.toInt()}%)")
+
+                    // Sync to server
+                    userDataRepo.savePlaybackProgress(
+                        contentType = contentType,
+                        contentId = contentId,
+                        positionMs = position,
+                        durationMs = duration,
+                        title = currentTitle,
+                        posterUrl = currentPosterUrl,
+                        backdropUrl = currentBackdropUrl,
+                        seasonNumber = currentSeasonNumber,
+                        episodeNumber = currentEpisodeNumber
+                    ).onSuccess {
+                        Log.d("ELLENTV_PROGRESS", "Synced progress to server: ${position}ms/${duration}ms (${progress.progressPercent.toInt()}%)")
+                    }.onFailure { e ->
+                        Log.e("ELLENTV_PROGRESS", "Failed to sync progress to server", e)
+                    }
                 }
             }
         }

@@ -24,6 +24,7 @@ from .routers.tmdb import (
 )
 from .routers.settings import router as settings_router
 from .routers.provider_users import router as provider_users_router
+from .routers.user_data import router as user_data_router
 from .provider_auto_sync import run_provider_auto_sync
 
 
@@ -249,6 +250,7 @@ async def _start_provider_auto_sync():
 
 app.include_router(providers_router)
 app.include_router(provider_users_router)
+app.include_router(user_data_router)
 app.include_router(live_router)
 app.include_router(epg_router)
 app.include_router(vod_router)
