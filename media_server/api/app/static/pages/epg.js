@@ -247,7 +247,10 @@ export function EpgPage(appState) {
         el("div", {}, [
           el("div", { class:"text-sm font-semibold text-zinc-100" }, item.name || "Sin nombre"),
           el("div", { class:"text-xs text-zinc-500" }, item.channel_number ? `Canal ${item.channel_number}` : "Sin número"),
-          el("div", { class:"mt-1" }, item.epg_channel_id ? badge("EPG", "green") : badge("NO EPG", "zinc")),
+          el("div", { class:"mt-1 flex items-center gap-2" }, [
+            item.epg_channel_id ? badge("✓ EPG Mapeado", "green") : badge("Sin mapeo EPG", "amber"),
+            item.programs && item.programs.length > 0 ? badge(`${item.programs.length} programas`, "blue") : null,
+          ]),
         ])
       ]);
 
@@ -276,27 +279,44 @@ export function EpgPage(appState) {
           const xmltvId = resolveXmltvId(rawValue, epgChannelLookup, epgOptionMap);
           if (!epgSourceId) return;
           if (rawValue && !xmltvId) {
-            status.textContent = "Selecciona un canal XMLTV válido.";
+            status.textContent = "⚠️ Selecciona un canal XMLTV válido de la lista.";
             e.target.value = currentLabel;
             return;
           }
-          status.textContent = "Guardando mapeo XMLTV…";
+          status.textContent = "💾 Guardando mapeo EPG…";
+          mappingStatus.textContent = "Actualizando base de datos…";
+          e.target.disabled = true;
           try {
-            await api.live.patch(item.live_id, {
+            const result = await api.live.patch(item.live_id, {
               epg_source_id: xmltvId ? epgSourceId : null,
               epg_channel_id: xmltvId,
             });
-            item.epg_source_id = xmltvId ? epgSourceId : null;
-            item.epg_channel_id = xmltvId;
+
+            // Actualizar estado local con la respuesta del servidor
+            item.epg_source_id = result.epg_source_id;
+            item.epg_channel_id = result.epg_channel_id;
             item.epg_channel_name = xmltvId ? (epgChannelLookup.get(xmltvId) || xmltvId) : null;
             currentLabel = xmltvId
               ? formatEpgOption({ xmltv_id: xmltvId, display_name: item.epg_channel_name })
               : "";
             e.target.value = currentLabel;
-            status.textContent = "✅ Mapeo guardado.";
-            reload();
+
+            status.textContent = xmltvId
+              ? `✅ Mapeo guardado: ${item.name} → ${item.epg_channel_name}`
+              : `✅ Mapeo eliminado: ${item.name}`;
+            mappingStatus.textContent = "✓ Cambios guardados en la base de datos.";
+
+            // Recargar después de un pequeño delay para asegurar consistencia
+            setTimeout(() => {
+              status.textContent = "🔄 Recargando grid para mostrar cambios…";
+              reload();
+            }, 800);
           } catch (err) {
-            status.textContent = `❌ ${err.message}`;
+            status.textContent = `❌ Error: ${err.message}`;
+            mappingStatus.textContent = `❌ No se pudo guardar el mapeo.`;
+            e.target.value = currentLabel;
+          } finally {
+            e.target.disabled = false;
           }
         }
       });
@@ -316,8 +336,8 @@ export function EpgPage(appState) {
       ]);
 
       const timelineBase = el("div", {
-        class:"bg-black/20 border-r border-white/5",
-        style:`grid-column:3 / span ${slotCount};`
+        class:"bg-black/20 border-r border-white/5 relative",
+        style:`grid-column:3 / span ${slotCount}; min-height: 72px;`
       });
 
       row.appendChild(channelCell);
@@ -325,9 +345,8 @@ export function EpgPage(appState) {
       row.appendChild(timelineBase);
 
       if (!item.programs?.length) {
-        row.appendChild(el("div", {
-          class:"text-xs text-zinc-500 px-3 py-3",
-          style:`grid-column:3 / span ${slotCount};grid-row:1;`
+        timelineBase.appendChild(el("div", {
+          class:"text-xs text-zinc-500 px-3 py-3"
         }, "Sin programación en la ventana."));
       } else {
         item.programs.forEach(pr => {
@@ -336,17 +355,20 @@ export function EpgPage(appState) {
           const clampedStart = Math.max(startMs, windowStartMs);
           const clampedEnd = Math.min(endMs, windowEndMs);
           if (!Number.isFinite(clampedStart) || !Number.isFinite(clampedEnd) || clampedEnd <= clampedStart) return;
-          const startSlot = Math.max(0, Math.floor((clampedStart - windowStartMs) / (slotMinutes * 60000)));
-          const endSlot = Math.min(slotCount, Math.ceil((clampedEnd - windowStartMs) / (slotMinutes * 60000)));
-          const span = Math.max(1, endSlot - startSlot);
-          row.appendChild(
+
+          // Calcular posición absoluta dentro del timeline
+          const startPercent = ((clampedStart - windowStartMs) / (windowEndMs - windowStartMs)) * 100;
+          const widthPercent = ((clampedEnd - clampedStart) / (windowEndMs - windowStartMs)) * 100;
+
+          timelineBase.appendChild(
             el("div", {
-              class:"mx-1 my-2 rounded-lg border border-white/10 bg-black/50 px-2 py-1 text-xs text-zinc-100 overflow-hidden",
-              style:`grid-column:${3 + startSlot} / span ${span};grid-row:1;`
+              class:"absolute top-2 bottom-2 rounded-lg border border-white/10 bg-gradient-to-br from-blue-900/80 to-purple-900/80 backdrop-blur-sm px-2 py-1 text-xs text-zinc-100 overflow-hidden shadow-lg hover:shadow-xl hover:from-blue-800/90 hover:to-purple-800/90 transition-all cursor-pointer",
+              style:`left:${startPercent}%; width:${widthPercent}%; min-width:${slotWidth * 0.9}px;`,
+              title:`${pr.title}\n${formatTime(pr.start)} - ${formatTime(pr.end)}${pr.category ? '\n' + pr.category : ''}${pr.description ? '\n\n' + pr.description : ''}`
             }, [
-              el("div", { class:"text-[10px] text-zinc-400" }, `${formatTime(pr.start)} - ${formatTime(pr.end)}`),
-              el("div", { class:"text-xs text-zinc-100 truncate" }, pr.title || "Untitled"),
-              pr.category ? el("div", { class:"text-[10px] text-zinc-500 truncate" }, pr.category) : null,
+              el("div", { class:"text-[10px] text-zinc-300 font-semibold mb-0.5" }, `${formatTime(pr.start)} - ${formatTime(pr.end)}`),
+              el("div", { class:"text-xs text-white font-medium truncate" }, pr.title || "Untitled"),
+              pr.category ? el("div", { class:"text-[10px] text-blue-300 truncate mt-0.5" }, pr.category) : null,
             ])
           );
         });
