@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 
 import httpx
@@ -74,7 +74,7 @@ def update_config(payload: TmdbConfigUpdate, db: Session = Depends(get_db)):
     if "requests_per_second" in data:
         cfg.requests_per_second = max(1, int(data["requests_per_second"] or 5))
 
-    cfg.updated_at = datetime.utcnow()
+    cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(cfg)
 
@@ -164,7 +164,7 @@ def tmdb_activity(limit: int = 20, db: Session = Depends(get_db)):
     items = items[:limit]
 
     return {
-        "server_time": datetime.utcnow().isoformat() + "Z",
+        "server_time": datetime.now(timezone.utc).isoformat() + "Z",
         "items": items
     }
 
@@ -189,7 +189,7 @@ def tmdb_genres(kind: str = "movie", db: Session = Depends(get_db)):
 
     language = cfg.language or "en-US"
     cache_key = (kind, language)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     with _genre_lock:
         cached = _genre_cache.get(cache_key)

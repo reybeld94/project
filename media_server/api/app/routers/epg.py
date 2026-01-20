@@ -142,7 +142,7 @@ def sync_epg_for_source_id(
                         if existing.display_name != display or existing.icon_url != icon_url:
                             existing.display_name = display
                             existing.icon_url = icon_url
-                            existing.updated_at = datetime.utcnow()
+                            existing.updated_at = datetime.now(timezone.utc)
                             up_channels += 1
                         if provider_for_legacy and existing.provider_id is None:
                             existing.provider_id = provider_for_legacy.id
@@ -153,7 +153,7 @@ def sync_epg_for_source_id(
                             xmltv_id=xml_id,
                             display_name=display,
                             icon_url=icon_url,
-                            updated_at=datetime.utcnow(),
+                            updated_at=datetime.now(timezone.utc),
                         )
                         db.add(ch)
                         db.flush()
@@ -205,7 +205,7 @@ def sync_epg_for_source_id(
                             xmltv_id=xml_id,
                             display_name=xml_id,
                             icon_url=None,
-                            updated_at=datetime.utcnow(),
+                            updated_at=datetime.now(timezone.utc),
                         )
                         db.add(ch)
                         db.flush()
@@ -230,7 +230,7 @@ def sync_epg_for_source_id(
                     ))
                     new_programs += 1
 
-            src.updated_at = datetime.utcnow()
+            src.updated_at = datetime.now(timezone.utc)
             db.commit()
 
         result = {
@@ -327,7 +327,7 @@ def create_source(payload: EpgSourceCreate, db: Session = Depends(get_db)):
         name=payload.name.strip(),
         xmltv_url=str(payload.xmltv_url).strip(),
         is_active=True,
-        updated_at=datetime.utcnow(),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(s)
     db.commit()
