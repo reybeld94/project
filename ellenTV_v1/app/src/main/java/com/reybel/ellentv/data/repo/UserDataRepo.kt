@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.reybel.ellentv.data.PreferencesManager
 import com.reybel.ellentv.data.api.ApiClient
+import com.reybel.ellentv.data.api.ApiService
 import com.reybel.ellentv.data.api.FavoriteCreate
 import com.reybel.ellentv.data.api.FavoriteOut
 import com.reybel.ellentv.data.api.MyListItemCreate
