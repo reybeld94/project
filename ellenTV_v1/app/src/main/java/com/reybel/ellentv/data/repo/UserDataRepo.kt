@@ -16,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class UserDataRepo(private val context: Context) {
-    private val apiService = ApiClient.service
+    private val apiService = ApiClient.retrofit.create(ApiService::class.java)
     private val preferencesManager = PreferencesManager(context)
 
     private fun getUniqueCode(): String? {
