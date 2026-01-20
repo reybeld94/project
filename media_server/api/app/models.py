@@ -654,3 +654,113 @@ class Episode(Base):
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class UserPlaybackProgress(Base):
+    """Tracks playback progress for users across devices"""
+    __tablename__ = "user_playback_progress"
+    __table_args__ = (
+        UniqueConstraint("provider_user_id", "content_type", "content_id", name="uq_user_playback_progress_user_content"),
+        Index("ix_user_playback_progress_provider_user_id", "provider_user_id"),
+        Index("ix_user_playback_progress_updated_at", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    provider_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("provider_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider_user = relationship("ProviderUser", lazy="joined")
+
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False)  # movie|episode|live
+    content_id: Mapped[str] = mapped_column(String(120), nullable=False)  # UUID as string for flexibility
+
+    position_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Position in milliseconds
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)  # Total duration in milliseconds
+
+    # Additional metadata for UI display
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    poster_url: Mapped[str | None] = mapped_column(String(800), nullable=True)
+    backdrop_url: Mapped[str | None] = mapped_column(String(800), nullable=True)
+
+    # For episodes
+    season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class UserWatchedItem(Base):
+    """Tracks items the user has watched completely (>=95%)"""
+    __tablename__ = "user_watched_items"
+    __table_args__ = (
+        UniqueConstraint("provider_user_id", "content_type", "content_id", name="uq_user_watched_items_user_content"),
+        Index("ix_user_watched_items_provider_user_id", "provider_user_id"),
+        Index("ix_user_watched_items_watched_at", "watched_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    provider_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("provider_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider_user = relationship("ProviderUser", lazy="joined")
+
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False)  # movie|episode
+    content_id: Mapped[str] = mapped_column(String(120), nullable=False)  # UUID as string
+
+    watched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class UserFavorite(Base):
+    """Tracks items the user marked as favorite (Me encanta)"""
+    __tablename__ = "user_favorites"
+    __table_args__ = (
+        UniqueConstraint("provider_user_id", "content_type", "content_id", name="uq_user_favorites_user_content"),
+        Index("ix_user_favorites_provider_user_id", "provider_user_id"),
+        Index("ix_user_favorites_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    provider_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("provider_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider_user = relationship("ProviderUser", lazy="joined")
+
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False)  # movie|series
+    content_id: Mapped[str] = mapped_column(String(120), nullable=False)  # UUID as string
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class UserMyList(Base):
+    """Tracks items the user added to My List"""
+    __tablename__ = "user_my_list"
+    __table_args__ = (
+        UniqueConstraint("provider_user_id", "content_type", "content_id", name="uq_user_my_list_user_content"),
+        Index("ix_user_my_list_provider_user_id", "provider_user_id"),
+        Index("ix_user_my_list_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    provider_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("provider_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider_user = relationship("ProviderUser", lazy="joined")
+
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False)  # movie|series
+    content_id: Mapped[str] = mapped_column(String(120), nullable=False)  # UUID as string
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

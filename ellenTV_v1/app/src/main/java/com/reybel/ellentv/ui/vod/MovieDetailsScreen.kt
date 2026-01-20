@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
@@ -50,8 +52,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.reybel.ellentv.data.api.VodItem
+import com.reybel.ellentv.data.repo.UserDataRepo
 import com.reybel.ellentv.ui.components.OptimizedAsyncImage
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 // Color base - negro puro para que los degradados funcionen
 private val BackgroundColor = Color.Black
@@ -65,11 +71,23 @@ fun MovieDetailsScreen(
     modifier: Modifier = Modifier,
     savedProgress: com.reybel.ellentv.data.repo.PlaybackProgress? = null
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val userDataRepo = remember { UserDataRepo(context) }
+
     val focusRequester = remember { FocusRequester() }
     var playFocused by remember { mutableStateOf(false) }
     var listFocused by remember { mutableStateOf(false) }
     var likeFocused by remember { mutableStateOf(false) }
     var shareFocused by remember { mutableStateOf(false) }
+
+    // State for favorites and my list
+    var isFavorite by remember { mutableStateOf(false) }
+    var isInMyList by remember { mutableStateOf(false) }
+
+    // Determine content type
+    val contentType = item.contentType ?: "movie"
+    val contentId = item.id
 
     // Extraer datos disponibles de VodItem
     val backdropUrl = item.backdropUrl
@@ -96,6 +114,16 @@ fun MovieDetailsScreen(
     LaunchedEffect(Unit) {
         visible = true
         focusRequester.requestFocus()
+
+        // Load favorite and my list status
+        scope.launch {
+            userDataRepo.checkIsFavorite(contentType, contentId).onSuccess {
+                isFavorite = it
+            }
+            userDataRepo.checkIsInMyList(contentType, contentId).onSuccess {
+                isInMyList = it
+            }
+        }
     }
 
     Box(
@@ -325,20 +353,44 @@ fun MovieDetailsScreen(
 
                     // My List
                     ActionButton(
-                        icon = Icons.Outlined.Add,
-                        label = "My List",
+                        icon = if (isInMyList) Icons.Default.Check else Icons.Outlined.Add,
+                        label = if (isInMyList) "In My List" else "My List",
                         isFocused = listFocused,
                         onFocusChanged = { listFocused = it },
-                        onClick = { }
+                        onClick = {
+                            scope.launch {
+                                if (isInMyList) {
+                                    userDataRepo.removeFromMyList(contentType, contentId).onSuccess {
+                                        isInMyList = false
+                                    }
+                                } else {
+                                    userDataRepo.addToMyList(contentType, contentId).onSuccess {
+                                        isInMyList = true
+                                    }
+                                }
+                            }
+                        }
                     )
 
                     // Like
                     CircularIconButton(
-                        icon = Icons.Outlined.FavoriteBorder,
+                        icon = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
                         isFocused = likeFocused,
                         focusedColor = Color(0xFFEF4444),
                         onFocusChanged = { likeFocused = it },
-                        onClick = { }
+                        onClick = {
+                            scope.launch {
+                                if (isFavorite) {
+                                    userDataRepo.removeFromFavorites(contentType, contentId).onSuccess {
+                                        isFavorite = false
+                                    }
+                                } else {
+                                    userDataRepo.addToFavorites(contentType, contentId).onSuccess {
+                                        isFavorite = true
+                                    }
+                                }
+                            }
+                        }
                     )
 
                     // Share

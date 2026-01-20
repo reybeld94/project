@@ -1,7 +1,10 @@
 package com.reybel.ellentv.data.api
 import com.reybel.ellentv.data.api.EpgGridResponse
 
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -137,4 +140,117 @@ interface ApiService {
         @Query("page") page: Int = 1,
         @Query("stale_while_revalidate") staleWhileRevalidate: Boolean = true
     ): CollectionItemsResponse
+
+    // ---------- USER DATA ----------
+
+    // Playback Progress
+    @POST("user-data/progress")
+    suspend fun savePlaybackProgress(
+        @Body progress: PlaybackProgressCreate,
+        @Query("unique_code") uniqueCode: String
+    ): PlaybackProgressOut
+
+    @GET("user-data/progress")
+    suspend fun getAllPlaybackProgress(
+        @Query("unique_code") uniqueCode: String,
+        @Query("limit") limit: Int = 100
+    ): List<PlaybackProgressOut>
+
+    @GET("user-data/progress/{content_type}/{content_id}")
+    suspend fun getPlaybackProgress(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    ): PlaybackProgressOut?
+
+    @DELETE("user-data/progress/{content_type}/{content_id}")
+    suspend fun deletePlaybackProgress(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    )
+
+    // Watched Items
+    @POST("user-data/watched")
+    suspend fun markAsWatched(
+        @Body watched: WatchedItemCreate,
+        @Query("unique_code") uniqueCode: String
+    ): WatchedItemOut
+
+    @GET("user-data/watched")
+    suspend fun getWatchedItems(
+        @Query("unique_code") uniqueCode: String,
+        @Query("content_type") contentType: String? = null,
+        @Query("limit") limit: Int = 100
+    ): List<WatchedItemOut>
+
+    @GET("user-data/watched/{content_type}/{content_id}")
+    suspend fun checkIsWatched(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    ): WatchedItemOut?
+
+    @DELETE("user-data/watched/{content_type}/{content_id}")
+    suspend fun unmarkWatched(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    )
+
+    // Favorites
+    @POST("user-data/favorites")
+    suspend fun addToFavorites(
+        @Body favorite: FavoriteCreate,
+        @Query("unique_code") uniqueCode: String
+    ): FavoriteOut
+
+    @GET("user-data/favorites")
+    suspend fun getFavorites(
+        @Query("unique_code") uniqueCode: String,
+        @Query("content_type") contentType: String? = null,
+        @Query("limit") limit: Int = 100
+    ): List<FavoriteOut>
+
+    @GET("user-data/favorites/{content_type}/{content_id}")
+    suspend fun checkIsFavorite(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    ): FavoriteOut?
+
+    @DELETE("user-data/favorites/{content_type}/{content_id}")
+    suspend fun removeFromFavorites(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    )
+
+    // My List
+    @POST("user-data/my-list")
+    suspend fun addToMyList(
+        @Body myListItem: MyListItemCreate,
+        @Query("unique_code") uniqueCode: String
+    ): MyListItemOut
+
+    @GET("user-data/my-list")
+    suspend fun getMyList(
+        @Query("unique_code") uniqueCode: String,
+        @Query("content_type") contentType: String? = null,
+        @Query("limit") limit: Int = 100
+    ): List<MyListItemOut>
+
+    @GET("user-data/my-list/{content_type}/{content_id}")
+    suspend fun checkIsInMyList(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    ): MyListItemOut?
+
+    @DELETE("user-data/my-list/{content_type}/{content_id}")
+    suspend fun removeFromMyList(
+        @Path("content_type") contentType: String,
+        @Path("content_id") contentId: String,
+        @Query("unique_code") uniqueCode: String
+    )
 }

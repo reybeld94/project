@@ -258,3 +258,89 @@ class ProviderUserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# User Data schemas
+class PlaybackProgressCreate(BaseModel):
+    content_type: str = Field(min_length=1, max_length=20)  # movie|episode|live
+    content_id: str = Field(min_length=1, max_length=120)
+    position_ms: int = Field(ge=0)
+    duration_ms: int = Field(ge=0)
+    title: str | None = None
+    poster_url: str | None = None
+    backdrop_url: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
+
+
+class PlaybackProgressUpdate(BaseModel):
+    position_ms: int = Field(ge=0)
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class PlaybackProgressOut(BaseModel):
+    id: UUID
+    provider_user_id: UUID
+    content_type: str
+    content_id: str
+    position_ms: int
+    duration_ms: int
+    title: str | None = None
+    poster_url: str | None = None
+    backdrop_url: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
+    updated_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WatchedItemCreate(BaseModel):
+    content_type: str = Field(min_length=1, max_length=20)  # movie|episode
+    content_id: str = Field(min_length=1, max_length=120)
+
+
+class WatchedItemOut(BaseModel):
+    id: UUID
+    provider_user_id: UUID
+    content_type: str
+    content_id: str
+    watched_at: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteCreate(BaseModel):
+    content_type: str = Field(min_length=1, max_length=20)  # movie|series
+    content_id: str = Field(min_length=1, max_length=120)
+
+
+class FavoriteOut(BaseModel):
+    id: UUID
+    provider_user_id: UUID
+    content_type: str
+    content_id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MyListItemCreate(BaseModel):
+    content_type: str = Field(min_length=1, max_length=20)  # movie|series
+    content_id: str = Field(min_length=1, max_length=120)
+
+
+class MyListItemOut(BaseModel):
+    id: UUID
+    provider_user_id: UUID
+    content_type: str
+    content_id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

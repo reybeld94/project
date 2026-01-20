@@ -273,3 +273,79 @@ data class OnDemandSearchResponse(
     val total: Int
         get() = totalMovies + totalSeries
 }
+
+// -------------------- User Data Models --------------------
+
+data class PlaybackProgressOut(
+    val id: String,
+    @Json(name = "provider_user_id") val providerUserId: String,
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String,
+    @Json(name = "position_ms") val positionMs: Long,
+    @Json(name = "duration_ms") val durationMs: Long,
+    val title: String? = null,
+    @Json(name = "poster_url") val posterUrl: String? = null,
+    @Json(name = "backdrop_url") val backdropUrl: String? = null,
+    @Json(name = "season_number") val seasonNumber: Int? = null,
+    @Json(name = "episode_number") val episodeNumber: Int? = null,
+    @Json(name = "updated_at") val updatedAt: String,
+    @Json(name = "created_at") val createdAt: String
+) {
+    val progressPercent: Float
+        get() = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()) * 100 else 0f
+
+    val shouldResume: Boolean
+        get() = positionMs > 5000 && progressPercent < 95
+}
+
+data class PlaybackProgressCreate(
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String,
+    @Json(name = "position_ms") val positionMs: Long,
+    @Json(name = "duration_ms") val durationMs: Long,
+    val title: String? = null,
+    @Json(name = "poster_url") val posterUrl: String? = null,
+    @Json(name = "backdrop_url") val backdropUrl: String? = null,
+    @Json(name = "season_number") val seasonNumber: Int? = null,
+    @Json(name = "episode_number") val episodeNumber: Int? = null
+)
+
+data class WatchedItemOut(
+    val id: String,
+    @Json(name = "provider_user_id") val providerUserId: String,
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String,
+    @Json(name = "watched_at") val watchedAt: String,
+    @Json(name = "created_at") val createdAt: String
+)
+
+data class WatchedItemCreate(
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String
+)
+
+data class FavoriteOut(
+    val id: String,
+    @Json(name = "provider_user_id") val providerUserId: String,
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String,
+    @Json(name = "created_at") val createdAt: String
+)
+
+data class FavoriteCreate(
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String
+)
+
+data class MyListItemOut(
+    val id: String,
+    @Json(name = "provider_user_id") val providerUserId: String,
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String,
+    @Json(name = "created_at") val createdAt: String
+)
+
+data class MyListItemCreate(
+    @Json(name = "content_type") val contentType: String,
+    @Json(name = "content_id") val contentId: String
+)
