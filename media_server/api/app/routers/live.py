@@ -334,6 +334,11 @@ def update_live_stream(
         v = (data["epg_channel_id"] or "").strip()
         s.epg_channel_id = v or None
 
+    if "epg_time_offset" in data:
+        v = data["epg_time_offset"]
+        if v is not None and (v < -720 or v > 720):
+            raise HTTPException(status_code=400, detail="epg_time_offset must be between -720 and 720 minutes (-12h to +12h)")
+        s.epg_time_offset = v
 
     if "alt1_stream_id" in data:
         s.alt1_stream_id = data["alt1_stream_id"]
@@ -357,6 +362,7 @@ def update_live_stream(
         "normalized_name": s.normalized_name,
         "stream_icon": s.stream_icon,
         "epg_channel_id": s.epg_channel_id,
+        "epg_time_offset": s.epg_time_offset,
         "is_active": s.is_active,
         "category_id": str(s.category_id) if s.category_id else None,
         "approved": s.approved,
