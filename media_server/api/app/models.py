@@ -393,6 +393,9 @@ class LiveStream(Base):
     epg_source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("epg_sources.id"), nullable=True)
     epg_source = relationship("EpgSource", lazy="joined")
 
+    # Time offset in minutes to adjust EPG program times for this channel
+    # Positive values shift programs forward, negative values shift backward
+    epg_time_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

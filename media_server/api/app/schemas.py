@@ -65,6 +65,7 @@ class LiveStreamUpdate(BaseModel):
 
     epg_source_id: UUID | None = None
     epg_channel_id: str | None = None
+    epg_time_offset: int | None = None  # Time offset in minutes (+/- for EPG adjustment)
 
     alt1_stream_id: UUID | None = None
     alt2_stream_id: UUID | None = None

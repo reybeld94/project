@@ -708,6 +708,8 @@ def epg_grid(
         xml_id = (s.epg_channel_id or "").strip()
         ch = epg_ch.get((s.epg_source_id, xml_id)) if (s.epg_source_id and xml_id) else None
 
+        # Get time offset for this channel (in minutes)
+        time_offset_minutes = s.epg_time_offset or 0
 
         programs = []
         if ch:
@@ -718,13 +720,24 @@ def epg_grid(
                 .order_by(EpgProgram.start_time.asc())
             ).scalars().all()
 
-            programs = [{
-                "title": pr.title,
-                "start": pr.start_time.isoformat(),
-                "end": pr.end_time.isoformat(),
-                "category": pr.category,
-                "description": pr.description,
-            } for pr in prows]
+            # Apply time offset to program times if configured
+            if time_offset_minutes != 0:
+                offset_delta = timedelta(minutes=time_offset_minutes)
+                programs = [{
+                    "title": pr.title,
+                    "start": (pr.start_time + offset_delta).isoformat(),
+                    "end": (pr.end_time + offset_delta).isoformat(),
+                    "category": pr.category,
+                    "description": pr.description,
+                } for pr in prows]
+            else:
+                programs = [{
+                    "title": pr.title,
+                    "start": pr.start_time.isoformat(),
+                    "end": pr.end_time.isoformat(),
+                    "category": pr.category,
+                    "description": pr.description,
+                } for pr in prows]
 
         items.append({
             "live_id": str(s.id),
@@ -734,6 +747,7 @@ def epg_grid(
             "epg_source_id": str(s.epg_source_id) if s.epg_source_id else None,
             "epg_channel_id": xml_id or None,
             "epg_channel_name": ch.display_name if ch else None,
+            "epg_time_offset": s.epg_time_offset,
             "programs": programs,
         })
 

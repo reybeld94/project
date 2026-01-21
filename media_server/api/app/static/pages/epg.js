@@ -28,6 +28,30 @@ function resolveXmltvId(value, epgChannelLookup, optionMap) {
   return epgChannelLookup.has(candidate) ? candidate : null;
 }
 
+// Convert minutes to +/-HHMM format
+function minutesToOffset(minutes) {
+  if (minutes === null || minutes === undefined || minutes === 0) return "";
+  const sign = minutes >= 0 ? "+" : "-";
+  const abs = Math.abs(minutes);
+  const hours = Math.floor(abs / 60);
+  const mins = abs % 60;
+  return `${sign}${String(hours).padStart(2, "0")}${String(mins).padStart(2, "0")}`;
+}
+
+// Convert +/-HHMM format to minutes
+function offsetToMinutes(value) {
+  if (!value || value.trim() === "") return null;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^([+-])(\d{2})(\d{2})$/);
+  if (!match) return null;
+  const sign = match[1];
+  const hours = parseInt(match[2], 10);
+  const mins = parseInt(match[3], 10);
+  if (hours > 12 || mins >= 60) return null; // Limit to +/-12 hours
+  const totalMinutes = hours * 60 + mins;
+  return sign === "-" ? -totalMinutes : totalMinutes;
+}
+
 export function EpgPage(appState) {
   let providerId = appState.epg?.providerId || "";
   let epgSourceId = appState.epg?.sourceId || "";
@@ -328,11 +352,74 @@ export function EpgPage(appState) {
         }))
       ]);
 
+      // Time offset input
+      let currentOffset = minutesToOffset(item.epg_time_offset);
+      const offsetInput = el("input", {
+        class:"w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-xs text-zinc-100 font-mono text-center mt-2",
+        placeholder:"+/-HHMM",
+        maxlength: "5",
+        value: currentOffset,
+        title: "Ajuste de tiempo: +HHMM adelanta, -HHMM atrasa (ej: +0030 = +30 min, -0100 = -1 hora)",
+        onkeypress: (e) => {
+          // Solo permitir números, + y -
+          if (!/[0-9+-]/.test(e.key)) {
+            e.preventDefault();
+          }
+        },
+        onchange: async (e) => {
+          const rawValue = e.target.value.trim();
+          const offsetMinutes = rawValue ? offsetToMinutes(rawValue) : null;
+
+          if (rawValue && offsetMinutes === null) {
+            status.textContent = "⚠️ Formato inválido. Usa +/-HHMM (ej: +0030, -0145)";
+            e.target.value = currentOffset;
+            return;
+          }
+
+          status.textContent = "💾 Guardando ajuste de tiempo EPG…";
+          mappingStatus.textContent = "Actualizando offset…";
+          e.target.disabled = true;
+
+          try {
+            const result = await api.live.patch(item.live_id, {
+              epg_time_offset: offsetMinutes,
+            });
+
+            // Actualizar estado local
+            item.epg_time_offset = result.epg_time_offset;
+            currentOffset = minutesToOffset(result.epg_time_offset);
+            e.target.value = currentOffset;
+
+            const offsetText = offsetMinutes
+              ? `${offsetMinutes > 0 ? '+' : ''}${offsetMinutes} minutos`
+              : "sin ajuste";
+            status.textContent = `✅ Offset guardado: ${item.name} → ${offsetText}`;
+            mappingStatus.textContent = "✓ Ajuste aplicado.";
+
+            // Recargar después de un pequeño delay
+            setTimeout(() => {
+              status.textContent = "🔄 Recargando grid con nuevo offset…";
+              reload();
+            }, 800);
+          } catch (err) {
+            status.textContent = `❌ Error: ${err.message}`;
+            mappingStatus.textContent = `❌ No se pudo guardar el offset.`;
+            e.target.value = currentOffset;
+          } finally {
+            e.target.disabled = false;
+          }
+        }
+      });
+
       const mappingCell = el("div", { class:"px-3 py-3 border-r border-white/10" }, [
         el("div", { class:"text-xs text-zinc-400 mb-2" }, sourceLabel),
         el("div", { class:"text-xs text-zinc-200 mb-2 truncate" }, mappingLabel),
         mappingInput,
         mappingList,
+        el("div", { class:"flex items-center gap-1 mt-2" }, [
+          el("span", { class:"text-[10px] text-zinc-500" }, "Ajuste:"),
+          offsetInput,
+        ]),
       ]);
 
       const timelineBase = el("div", {
