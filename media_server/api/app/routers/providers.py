@@ -681,8 +681,6 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
         ext_stream_id = int(item.get("stream_id"))
         name = (item.get("name") or "").strip() or f"Live {ext_stream_id}"
         icon = (item.get("stream_icon") or None)
-        epg_id = (item.get("epg_channel_id") or None)
-
         seen.add(ext_stream_id)
 
         existing = db.execute(
@@ -699,13 +697,11 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
             if (
                 existing.name != name
                 or existing.stream_icon != icon
-                or existing.epg_channel_id != epg_id
                 or existing.category_id != cat.id
                 or existing.is_active is False
             ):
                 existing.name = name
                 existing.stream_icon = icon
-                existing.epg_channel_id = epg_id
                 existing.category_id = cat.id
                 existing.is_active = True
                 existing.updated_at = now
@@ -717,7 +713,6 @@ def sync_live_streams(provider_id: str, category_ext_id: int, db: Session = Depe
                 provider_stream_id=ext_stream_id,
                 name=name,
                 stream_icon=icon,
-                epg_channel_id=epg_id,
                 is_active=True,
                 updated_at=now,
             ))
@@ -811,8 +806,6 @@ def sync_all(
 
                 name = (item.get("name") or "").strip() or f"Live {ext_stream_id}"
                 icon = item.get("stream_icon") or None
-                epg_id = item.get("epg_channel_id") or None
-
                 seen.add(ext_stream_id)
 
                 existing = db.execute(
@@ -828,13 +821,11 @@ def sync_all(
                     if (
                         existing.name != name
                         or existing.stream_icon != icon
-                        or existing.epg_channel_id != epg_id
                         or existing.category_id != cat.id
                         or existing.is_active is False
                     ):
                         existing.name = name
                         existing.stream_icon = icon
-                        existing.epg_channel_id = epg_id
                         existing.category_id = cat.id
                         existing.is_active = True
                         existing.updated_at = now
@@ -846,7 +837,6 @@ def sync_all(
                         provider_stream_id=ext_stream_id,
                         name=name,
                         stream_icon=icon,
-                        epg_channel_id=epg_id,
                         is_active=True,
                         updated_at=now,
                     ))
